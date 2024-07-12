@@ -4,6 +4,11 @@ package storage
 // type metricName string
 // type metricValue string
 
+const (
+	gaugeType   = "gauge"
+	counterType = "counter"
+)
+
 type Metric struct {
 	Type     string `json:"type"`
 	Name     string `json:"name"`
@@ -27,7 +32,7 @@ type Metrics struct {
 
 type Driver interface {
 	Update(mtype, mname, mval string) error
-	Fetch(mtype, mname string) (Metric, error)
+	Get(mtype, mname string) (string, error)
 }
 
 type Storage struct {
@@ -38,7 +43,7 @@ func NewStorage(storageType string) *Storage {
 	var driver Driver
 	switch storageType {
 	default:
-		driver = NewMemStorage()
+		driver = NewMemDriver()
 	}
 	return &Storage{
 		Driver: driver,

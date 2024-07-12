@@ -5,75 +5,101 @@ import (
 	"strconv"
 )
 
-type MemStorage struct {
-	data Metrics
+type CounterTable map[string]int64
+type GaugeTable map[string]float64
+
+type memDriver struct {
+	data map[string]interface{}
 }
 
-func NewMemStorage() *MemStorage {
-	return &MemStorage{
-		data: Metrics{
-			GaugeMetrics:   make([]GaugeMetric, 0),
-			CounterMetrics: make([]CounterMetric, 0),
-		},
+func NewMemDriver() *memDriver {
+	return &memDriver{
+		data: make(
+			map[string]interface{},
+		),
 	}
 }
 
-func (s *MemStorage) Fetch(mtype, mname string) (Metric, error) {
-	switch mtype {
-	case "gauge":
-		for _, m := range s.data.GaugeMetrics {
-			if m.Name == mname {
-				return Metric{
-					Type:     m.Type,
-					Name:     m.Name,
-					ValueStr: m.ValueStr,
-				}, nil
-			}
-		}
-	case "counter":
-		for _, m := range s.data.CounterMetrics {
-			if m.Name == mname {
-				return Metric{
-					Type:     m.Type,
-					Name:     m.Name,
-					ValueStr: m.ValueStr,
-				}, nil
-			}
-		}
-	}
-	return Metric{}, errors.New("not found")
+func (m *memDriver) Open() error {
+	m.data = make(map[string]interface{})
+	m.data["counter"] = make(CounterTable)
+	m.data["gauge"] = make(GaugeTable)
+	return nil
 }
 
-func (s *MemStorage) Update(mtype, mname, mvalue string) (err error) {
+func (m *memDriver) Close() error {
+	m.data = nil
+	return nil
+}
+
+func (s *memDriver) Update(mtype, mname, mvalue string) (err error) {
 	switch mtype {
-	case "gauge":
+	case gaugeType:
 		var value float64
 		if value, err = strconv.ParseFloat(mvalue, 64); err != nil {
 			return err
 		}
-		s.data.GaugeMetrics = append(s.data.GaugeMetrics, GaugeMetric{
-			Metric: Metric{
-				Type:     mtype,
-				Name:     mname,
-				ValueStr: mvalue,
-			},
-			Value: value,
-		})
-	case "counter":
+		s.UpdateGauge(mname, value)
+	case counterType:
 		var value int
 		if value, err = strconv.Atoi(mvalue); err != nil {
 			return err
 		}
-		s.data.CounterMetrics = append(s.data.CounterMetrics, CounterMetric{
-			Metric: Metric{
-				Type:     mtype,
-				Name:     mname,
-				ValueStr: mvalue,
-			},
-			Value: int64(value),
-		})
+		s.UpdateCounter(mname, int64(value))
 	default:
 		return errors.New("invalid metric type")
 	}
 	return nil
+}
+
+func (s *memDriver) Get(mtype, mname string) (string, error) {
+	switch mtype {
+	case gaugeType:
+		value, ok := s.GetGauge(mname)
+		if !ok {
+			return "", errors.New("not found")
+		}
+		return strconv.FormatFloat(value, 'f', -1, 64), nil
+	case counterType:
+		value, ok := s.GetCounter(mname)
+		if !ok {
+			return "", errors.New("not found")
+		}
+		return strconv.FormatInt(value, 10), nil
+	}
+	return "", errors.New("invalid metric type")
+}
+
+func (m *memDriver) GetCounter(key string) (int64, bool) {
+	data, ok := m.data["counter"].(CounterTable)
+	if !ok {
+		return 0, false
+	}
+	return data[key], true
+}
+
+func (m *memDriver) GetGauge(key string) (float64, bool) {
+	data, ok := m.data["gauge"].(GaugeTable)
+	if !ok {
+		return 0, false
+	}
+	return data[key], true
+}
+
+func (m *memDriver) UpdateGauge(key string, value float64) {
+	data, _ := m.data["gauge"].(GaugeTable)
+	data[key] = value
+	m.data["gauge"] = data
+}
+
+func (m *memDriver) UpdateCounter(key string, value int64) {
+	data, _ := m.data["counter"].(CounterTable)
+	oldValue := data[key]
+	if oldValue == 0 {
+		data[key] = value
+	} else {
+		value = oldValue + value
+	}
+	data[key] = value
+	m.data["counter"] = data
 }
