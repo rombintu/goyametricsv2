@@ -2,12 +2,14 @@ package server
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -101,10 +103,11 @@ func TestServer_updateMetrics(t *testing.T) {
 
 			res := rec.Result()
 			defer res.Body.Close()
-
+			resBody, err := io.ReadAll(res.Body)
+			require.NoError(t, err)
 			assert.Equal(t, tt.want.code, res.StatusCode)
-			assert.Equal(t, tt.want.response, rec.Body.String())
-			assert.Equal(t, tt.want.contentType, rec.Result().Header.Get("Content-Type"))
+			assert.Equal(t, tt.want.response, string(resBody))
+			assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"))
 		})
 	}
 }
