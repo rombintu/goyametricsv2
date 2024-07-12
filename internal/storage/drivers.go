@@ -32,36 +32,36 @@ func (m *memDriver) Close() error {
 	return nil
 }
 
-func (s *memDriver) Update(mtype, mname, mvalue string) (err error) {
+func (m *memDriver) Update(mtype, mname, mvalue string) (err error) {
 	switch mtype {
 	case gaugeType:
 		var value float64
 		if value, err = strconv.ParseFloat(mvalue, 64); err != nil {
 			return err
 		}
-		s.updateGauge(mname, value)
+		m.updateGauge(mname, value)
 	case counterType:
 		var value int
 		if value, err = strconv.Atoi(mvalue); err != nil {
 			return err
 		}
-		s.updateCounter(mname, int64(value))
+		m.updateCounter(mname, int64(value))
 	default:
 		return errors.New("invalid metric type")
 	}
 	return nil
 }
 
-func (s *memDriver) Get(mtype, mname string) (string, error) {
+func (m *memDriver) Get(mtype, mname string) (string, error) {
 	switch mtype {
 	case gaugeType:
-		value, ok := s.getGauge(mname)
+		value, ok := m.getGauge(mname)
 		if !ok {
 			return "", errors.New("not found")
 		}
 		return strconv.FormatFloat(value, 'f', -1, 64), nil
 	case counterType:
-		value, ok := s.getCounter(mname)
+		value, ok := m.getCounter(mname)
 		if !ok {
 			return "", errors.New("not found")
 		}
