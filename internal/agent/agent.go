@@ -15,7 +15,7 @@ import (
 )
 
 type Agent struct {
-	serverURL      string
+	serverAddress  string
 	pollInterval   int64
 	reportInterval int64
 	data           map[string]interface{}
@@ -28,7 +28,7 @@ func NewAgent(c config.AgentConfig) *Agent {
 	data[storage.CounterType] = make(storage.CounterTable)
 	data[storage.GaugeType] = make(storage.GaugeTable)
 	return &Agent{
-		serverURL:      fixServerURL(c.ServerURL),
+		serverAddress:  fixServerURL(c.Address),
 		pollInterval:   c.PollInterval,
 		reportInterval: c.ReportInterval,
 		data:           data,
@@ -65,7 +65,7 @@ func (a *Agent) postRequest(url string) error {
 }
 
 func (a *Agent) sendDataOnServer(metricType, metricName string, value string) error {
-	url := fmt.Sprintf("%s/update/%s/%s/%s", a.serverURL, metricType, metricName, value)
+	url := fmt.Sprintf("%s/update/%s/%s/%s", a.serverAddress, metricType, metricName, value)
 	if err := a.postRequest(url); err != nil {
 		return err
 	}

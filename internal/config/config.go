@@ -7,29 +7,25 @@ import (
 )
 
 type ServerConfig struct {
-	Address       string `yaml:"address" env-default:"localhost:8080"`
-	Environment   string `yaml:"Environment" env-default:"local"`
+	Listen        string `yaml:"Listen" env-default:"localhost:8080"`
 	StorageDriver string `yaml:"StorageDriver" env-default:"mem"`
 }
 
 type AgentConfig struct {
-	ServerURL      string `yaml:"serverURL" env-default:"http://localhost:8080"`
+	Address        string `yaml:"address" env-default:"http://localhost:8080"`
 	PollInterval   int64  `yaml:"pollInterval" env-default:"2"`
 	ReportInterval int64  `yaml:"reportInterval" env-default:"10"`
-	Mode           string `yaml:"mode" env-default:"debug"`
 }
 
 // Try load Server Config from flags
 func LoadServerConfigFromFlags() ServerConfig {
 	var config ServerConfig
-	e := flag.String("environment", "local", "Environment")
-	s := flag.String("storageDriver", "mem", "Storage driver")
 	a := flag.String("a", "localhost:8080", "Server address")
+	s := flag.String("storageDriver", "mem", "Storage driver")
 	flag.Parse()
 
-	config.Address = *a
+	config.Listen = *a
 	config.StorageDriver = *s
-	config.Environment = *e
 	return config
 }
 
@@ -38,12 +34,11 @@ func LoadAgentConfig() AgentConfig {
 	var config AgentConfig
 	fromFlags := LoadAgentConfigFromFlags()
 
-	// Try load ADDRESS (ServerUrl)
 	address, ok := os.LookupEnv("ADDRESS")
 	if !ok {
-		config.ServerURL = fromFlags.ServerURL
+		config.Address = fromFlags.Address
 	} else {
-		config.ServerURL = address
+		config.Address = address
 	}
 
 	// Try load REPORT_INTERVAL
@@ -82,7 +77,7 @@ func LoadAgentConfigFromFlags() AgentConfig {
 	p := flag.Int64("p", 2, "Poll interval")
 	flag.Parse()
 
-	config.ServerURL = *a
+	config.Address = *a
 	config.ReportInterval = *r
 	config.PollInterval = *p
 
