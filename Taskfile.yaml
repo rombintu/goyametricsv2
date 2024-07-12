@@ -12,3 +12,6 @@ tasks:
   build-agent:
     cmds:
       - go build -o cmd/agent/agent cmd/agent/main.go
+  statictest:
+    cmds:
+      - go vet -vettool=./statictest ./...

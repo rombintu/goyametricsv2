@@ -27,7 +27,7 @@ func NewAgent(serverURL string, pollInterval, reportInterval int64) *Agent {
 	data[storage.CounterType] = make(storage.CounterTable)
 	data[storage.GaugeType] = make(storage.GaugeTable)
 	return &Agent{
-		serverURL:      fixServerUrl(serverURL),
+		serverURL:      fixServerURL(serverURL),
 		pollInterval:   pollInterval,
 		reportInterval: reportInterval,
 		data:           data,
@@ -35,7 +35,7 @@ func NewAgent(serverURL string, pollInterval, reportInterval int64) *Agent {
 	}
 }
 
-func fixServerUrl(url string) string {
+func fixServerURL(url string) string {
 	if strings.HasPrefix(url, "http://") {
 		return url
 	} else {
