@@ -28,7 +28,7 @@ func (s *Server) Start() {
 	s.ConfigureRenderer()
 	s.ConfigureRouter()
 	s.ConfigureStorage()
-	if err := http.ListenAndServe(":8080", s.router); err != nil {
+	if err := http.ListenAndServe(s.config.Address, s.router); err != nil {
 		panic(err)
 	}
 }
