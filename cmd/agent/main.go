@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	config := config.LoadAgentConfigFromFlags()
+	config := config.LoadAgentConfig()
 	a := agent.NewAgent(config)
 
 	go a.RunPoll()
