@@ -76,12 +76,20 @@ func (m *memDriver) getCounter(key string) (int64, bool) {
 	if !ok {
 		return 0, false
 	}
+	_, valueIsExist := data[key]
+	if !valueIsExist {
+		return 0, false
+	}
 	return data[key], true
 }
 
 func (m *memDriver) getGauge(key string) (float64, bool) {
 	data, ok := m.data[GaugeType].(GaugeTable)
 	if !ok {
+		return 0, false
+	}
+	_, valueIsExist := data[key]
+	if !valueIsExist {
 		return 0, false
 	}
 	return data[key], true
@@ -103,4 +111,8 @@ func (m *memDriver) updateCounter(key string, value int64) {
 	}
 	data[key] = value
 	m.data[CounterType] = data
+}
+
+func (m *memDriver) GetAll() map[string]interface{} {
+	return m.data
 }

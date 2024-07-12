@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metrics</title>
+</head>
+<body>
+    <h2>Counter Metrics</h2>
+    <ul>
+        {{range $key, $value := .counter}}
+            <li><strong>{{ $key }}</strong>: {{ $value }}</li>
+        {{end}}
+    </ul>
+    <br>
+    <h2>Gauge Metrics</h2>
+    <ul>
+        {{range $key, $value := .gauge}}
+            <li><strong>{{ $key }}</strong>: {{ $value }}</li>
+        {{end}}
+    </ul>
+</body>
+</html>

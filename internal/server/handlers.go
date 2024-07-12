@@ -2,36 +2,34 @@ package server
 
 import (
 	"net/http"
-	"strings"
+
+	"github.com/labstack/echo"
 )
 
-func (s *Server) MetricsHandler(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
+func (s *Server) MetricsHandler(c echo.Context) error {
+	mtype := c.Param("mtype")
+	mname := c.Param("mname")
+	mvalue := c.Param("mvalue")
 
-	if r.Method == http.MethodPost {
-		if strings.HasPrefix(path, "/update/") {
-			parts := strings.Split(strings.TrimPrefix(path, "/update/"), "/")
-			if len(parts) == 3 {
-				metricType := parts[0]
-				metricName := parts[1]
-				metricValue := parts[2]
-				if metricName == "" {
-					http.Error(w, "Missing metric name", http.StatusNotFound)
-					return
-				}
-				if err := s.storage.Driver.Update(metricType, metricName, metricValue); err != nil {
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				//http.StatusOK
-				w.WriteHeader(http.StatusOK)
-			} else {
-				http.Error(w, "Invalid format", http.StatusNotFound)
-			}
-
-		} else {
-			http.Error(w, "Not found", http.StatusNotFound)
-		}
+	if mname == "" {
+		return c.String(http.StatusNotFound, "Missing metric name")
 	}
+	if err := s.storage.Driver.Update(mtype, mname, mvalue); err != nil {
+		return c.String(http.StatusBadRequest, err.Error())
+	}
+	return c.String(http.StatusOK, "updated")
+}
+
+func (s *Server) MetricGetHandler(c echo.Context) error {
+	mtype := c.Param("mtype")
+	mname := c.Param("mname")
+	value, err := s.storage.Driver.Get(mtype, mname)
+	if err != nil {
+		return c.String(http.StatusNotFound, "not found")
+	}
+	return c.String(http.StatusOK, value)
+}
+
+func (s *Server) RootHandler(c echo.Context) error {
+	return c.Render(http.StatusOK, "metrics.html", s.storage.Driver.GetAll())
 }

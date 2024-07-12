@@ -8,6 +8,7 @@ const (
 type Driver interface {
 	Update(mtype, mname, mval string) error
 	Get(mtype, mname string) (string, error)
+	GetAll() map[string]interface{}
 	Open() error
 	Close() error
 }
