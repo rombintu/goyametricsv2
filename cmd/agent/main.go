@@ -8,6 +8,7 @@ import (
 )
 
 func main() {
+	// Еще попытка. Гитхаб лагает
 	config := config.LoadAgentConfig()
 	a := agent.NewAgent(config)
 
