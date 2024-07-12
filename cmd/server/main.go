@@ -1,12 +1,14 @@
 package main
 
 import (
+	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/server"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 )
 
 func main() {
-	storage := storage.NewStorage("mem")
-	server := server.NewServer(storage)
+	config := config.LoadServerConfigFromFlags()
+	storage := storage.NewStorage(config.StorageDriver)
+	server := server.NewServer(storage, config)
 	server.Start()
 }

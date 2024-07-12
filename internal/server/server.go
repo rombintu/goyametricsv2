@@ -6,16 +6,19 @@ import (
 	"text/template"
 
 	"github.com/labstack/echo"
+	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 )
 
 type Server struct {
+	config  config.ServerConfig
 	storage *storage.Storage
 	router  *echo.Echo
 }
 
-func NewServer(storage *storage.Storage) *Server {
+func NewServer(storage *storage.Storage, config config.ServerConfig) *Server {
 	return &Server{
+		config:  config,
 		router:  echo.New(),
 		storage: storage,
 	}

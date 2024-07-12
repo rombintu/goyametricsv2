@@ -4,14 +4,12 @@ import (
 	"time"
 
 	"github.com/rombintu/goyametricsv2/internal/agent"
+	"github.com/rombintu/goyametricsv2/internal/config"
 )
 
 func main() {
-	a := agent.NewAgent(
-		"localhost:8080",
-		2,
-		10,
-	)
+	config := config.LoadAgentConfigFromFlags()
+	a := agent.NewAgent(config)
 
 	go a.RunPoll()
 	go a.RunReport()

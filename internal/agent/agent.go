@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 )
 
@@ -22,14 +23,14 @@ type Agent struct {
 	metrics        map[string]string
 }
 
-func NewAgent(serverURL string, pollInterval, reportInterval int64) *Agent {
+func NewAgent(c config.AgentConfig) *Agent {
 	data := make(map[string]interface{})
 	data[storage.CounterType] = make(storage.CounterTable)
 	data[storage.GaugeType] = make(storage.GaugeTable)
 	return &Agent{
-		serverURL:      fixServerURL(serverURL),
-		pollInterval:   pollInterval,
-		reportInterval: reportInterval,
+		serverURL:      fixServerURL(c.ServerURL),
+		pollInterval:   c.PollInterval,
+		reportInterval: c.ReportInterval,
 		data:           data,
 		metrics:        make(map[string]string),
 	}

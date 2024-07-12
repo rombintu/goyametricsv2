@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/labstack/echo"
+	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/stretchr/testify/assert"
 )
@@ -18,7 +19,10 @@ const (
 func TestServer_updateMetrics(t *testing.T) {
 	e := echo.New()
 	storage := storage.NewStorage("mem")
-	s := NewServer(storage)
+	conf := config.ServerConfig{
+		StorageDriver: "mem",
+	}
+	s := NewServer(storage, conf)
 	s.ConfigureStorage()
 	s.ConfigureRouter()
 	type want struct {
@@ -114,7 +118,10 @@ func TestServer_updateMetrics(t *testing.T) {
 func TestServer_MetricGetHandler(t *testing.T) {
 	e := echo.New()
 	storage := storage.NewStorage("mem")
-	s := NewServer(storage)
+	conf := config.ServerConfig{
+		StorageDriver: "mem",
+	}
+	s := NewServer(storage, conf)
 	s.ConfigureStorage()
 	s.ConfigureRouter()
 	storage.Driver.Update(counterMetricType, "counter1", "1")
