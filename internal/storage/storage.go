@@ -1,12 +1,8 @@
 package storage
 
-// type metricType string
-// type metricName string
-// type metricValue string
-
 const (
-	gaugeType   = "gauge"
-	counterType = "counter"
+	GaugeType   = "gauge"
+	CounterType = "counter"
 )
 
 type Driver interface {
