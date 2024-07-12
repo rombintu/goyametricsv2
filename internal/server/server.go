@@ -21,9 +21,14 @@ func NewServer(storage *storage.Storage) *Server {
 
 func (s *Server) Start() {
 	s.ConfigureRouter()
+	s.ConfigureStorage()
 	if err := http.ListenAndServe(":8080", s.router); err != nil {
 		panic(err)
 	}
+}
+
+func (s *Server) ConfigureStorage() {
+	s.storage.Open()
 }
 
 func (s *Server) ConfigureRouter() {

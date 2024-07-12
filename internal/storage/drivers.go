@@ -39,13 +39,13 @@ func (s *memDriver) Update(mtype, mname, mvalue string) (err error) {
 		if value, err = strconv.ParseFloat(mvalue, 64); err != nil {
 			return err
 		}
-		s.UpdateGauge(mname, value)
+		s.updateGauge(mname, value)
 	case counterType:
 		var value int
 		if value, err = strconv.Atoi(mvalue); err != nil {
 			return err
 		}
-		s.UpdateCounter(mname, int64(value))
+		s.updateCounter(mname, int64(value))
 	default:
 		return errors.New("invalid metric type")
 	}
@@ -55,13 +55,13 @@ func (s *memDriver) Update(mtype, mname, mvalue string) (err error) {
 func (s *memDriver) Get(mtype, mname string) (string, error) {
 	switch mtype {
 	case gaugeType:
-		value, ok := s.GetGauge(mname)
+		value, ok := s.getGauge(mname)
 		if !ok {
 			return "", errors.New("not found")
 		}
 		return strconv.FormatFloat(value, 'f', -1, 64), nil
 	case counterType:
-		value, ok := s.GetCounter(mname)
+		value, ok := s.getCounter(mname)
 		if !ok {
 			return "", errors.New("not found")
 		}
@@ -70,7 +70,7 @@ func (s *memDriver) Get(mtype, mname string) (string, error) {
 	return "", errors.New("invalid metric type")
 }
 
-func (m *memDriver) GetCounter(key string) (int64, bool) {
+func (m *memDriver) getCounter(key string) (int64, bool) {
 	data, ok := m.data["counter"].(CounterTable)
 	if !ok {
 		return 0, false
@@ -78,7 +78,7 @@ func (m *memDriver) GetCounter(key string) (int64, bool) {
 	return data[key], true
 }
 
-func (m *memDriver) GetGauge(key string) (float64, bool) {
+func (m *memDriver) getGauge(key string) (float64, bool) {
 	data, ok := m.data["gauge"].(GaugeTable)
 	if !ok {
 		return 0, false
@@ -86,13 +86,13 @@ func (m *memDriver) GetGauge(key string) (float64, bool) {
 	return data[key], true
 }
 
-func (m *memDriver) UpdateGauge(key string, value float64) {
+func (m *memDriver) updateGauge(key string, value float64) {
 	data, _ := m.data["gauge"].(GaugeTable)
 	data[key] = value
 	m.data["gauge"] = data
 }
 
-func (m *memDriver) UpdateCounter(key string, value int64) {
+func (m *memDriver) updateCounter(key string, value int64) {
 	data, _ := m.data["counter"].(CounterTable)
 	oldValue := data[key]
 	if oldValue == 0 {

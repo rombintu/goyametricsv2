@@ -9,30 +9,11 @@ const (
 	counterType = "counter"
 )
 
-type Metric struct {
-	Type     string `json:"type"`
-	Name     string `json:"name"`
-	ValueStr string `json:"value"`
-}
-
-type CounterMetric struct {
-	Metric
-	Value int64 `json:"value"`
-}
-
-type GaugeMetric struct {
-	Metric
-	Value float64 `json:"value"`
-}
-
-type Metrics struct {
-	GaugeMetrics   []GaugeMetric
-	CounterMetrics []CounterMetric
-}
-
 type Driver interface {
 	Update(mtype, mname, mval string) error
 	Get(mtype, mname string) (string, error)
+	Open() error
+	Close() error
 }
 
 type Storage struct {
@@ -47,5 +28,11 @@ func NewStorage(storageType string) *Storage {
 	}
 	return &Storage{
 		Driver: driver,
+	}
+}
+
+func (s *Storage) Open() {
+	if err := s.Driver.Open(); err != nil {
+		panic(err)
 	}
 }
