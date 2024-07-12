@@ -1,0 +1,14 @@
+version: '3'
+tasks:
+  mtest-agent:
+    cmds:
+      - metricstest -test.v -test.run=^TestIteration1$ -agent-binary-path=cmd/agent/app
+  mtest-server:
+    cmds:
+      - metricstest -test.v -test.run=^TestIteration1$ -agent-binary-path=cmd/server/app
+  build-server:
+    cmds:
+      - go build -o cmd/server/server cmd/server/main.go
+  build-agent:
+    cmds:
+      - go build -o cmd/agent/agent cmd/agent/main.go
