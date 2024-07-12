@@ -6,6 +6,7 @@ import (
 	"text/template"
 
 	"github.com/labstack/echo"
+	"github.com/labstack/gommon/log"
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 )
@@ -28,6 +29,7 @@ func (s *Server) Start() {
 	s.ConfigureRenderer()
 	s.ConfigureRouter()
 	s.ConfigureStorage()
+	log.Infof("Server starting on: %s", s.config.Listen)
 	if err := http.ListenAndServe(s.config.Listen, s.router); err != nil {
 		panic(err)
 	}

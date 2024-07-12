@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	config := config.LoadServerConfigFromFlags()
+	config := config.LoadServerConfig()
 	storage := storage.NewStorage(config.StorageDriver)
 	server := server.NewServer(storage, config)
 	server.Start()

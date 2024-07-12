@@ -17,6 +17,19 @@ type AgentConfig struct {
 	ReportInterval int64  `yaml:"reportInterval" env-default:"10"`
 }
 
+func LoadServerConfig() ServerConfig {
+	var config ServerConfig
+	fromFlags := LoadServerConfigFromFlags()
+
+	address, ok := os.LookupEnv("ADDRESS")
+	if !ok {
+		config.Listen = fromFlags.Listen
+	} else {
+		config.Listen = address
+	}
+	return config
+}
+
 // Try load Server Config from flags
 func LoadServerConfigFromFlags() ServerConfig {
 	var config ServerConfig
