@@ -6,18 +6,19 @@ import (
 	"text/template"
 
 	"github.com/labstack/echo"
-	"github.com/labstack/gommon/log"
 	"github.com/rombintu/goyametricsv2/internal/config"
+	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"go.uber.org/zap"
 )
 
 type Server struct {
 	config  config.ServerConfig
-	storage *storage.Storage
+	storage storage.Storage
 	router  *echo.Echo
 }
 
-func NewServer(storage *storage.Storage, config config.ServerConfig) *Server {
+func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
 	return &Server{
 		config:  config,
 		router:  echo.New(),
@@ -27,16 +28,19 @@ func NewServer(storage *storage.Storage, config config.ServerConfig) *Server {
 
 func (s *Server) Start() {
 	s.ConfigureRenderer()
+	s.ConfigureMiddlewares()
 	s.ConfigureRouter()
 	s.ConfigureStorage()
-	log.Infof("Server starting on: %s", s.config.Listen)
+	logger.Log.Info("Server is starting on: ", zap.String("url", s.config.Listen))
 	if err := http.ListenAndServe(s.config.Listen, s.router); err != nil {
 		panic(err)
 	}
 }
 
 func (s *Server) ConfigureStorage() {
-	s.storage.Open()
+	if err := s.storage.Open(); err != nil {
+		logger.Log.Error("cannot open storage", zap.Error(err))
+	}
 }
 
 type Template struct {
@@ -58,4 +62,9 @@ func (s *Server) ConfigureRouter() {
 	s.router.GET("/", s.RootHandler)
 	s.router.GET("/value/:mtype/:mname", s.MetricGetHandler)
 	s.router.POST("/update/:mtype/:mname/:mvalue", s.MetricsHandler)
+}
+
+func (s *Server) ConfigureMiddlewares() {
+	logger.Initialize(s.config.EnvMode)
+	s.router.Use(logger.RequestLogger)
 }

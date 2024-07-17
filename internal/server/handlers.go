@@ -14,7 +14,7 @@ func (s *Server) MetricsHandler(c echo.Context) error {
 	if mname == "" {
 		return c.String(http.StatusNotFound, "Missing metric name")
 	}
-	if err := s.storage.Driver.Update(mtype, mname, mvalue); err != nil {
+	if err := s.storage.Update(mtype, mname, mvalue); err != nil {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 	return c.String(http.StatusOK, "updated")
@@ -23,7 +23,7 @@ func (s *Server) MetricsHandler(c echo.Context) error {
 func (s *Server) MetricGetHandler(c echo.Context) error {
 	mtype := c.Param("mtype")
 	mname := c.Param("mname")
-	value, err := s.storage.Driver.Get(mtype, mname)
+	value, err := s.storage.Get(mtype, mname)
 	if err != nil {
 		return c.String(http.StatusNotFound, "not found")
 	}
@@ -31,5 +31,5 @@ func (s *Server) MetricGetHandler(c echo.Context) error {
 }
 
 func (s *Server) RootHandler(c echo.Context) error {
-	return c.Render(http.StatusOK, "metrics.html", s.storage.Driver.GetAll())
+	return c.Render(http.StatusOK, "metrics.html", s.storage.GetAll())
 }

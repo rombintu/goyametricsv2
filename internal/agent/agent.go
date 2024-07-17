@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -8,10 +9,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rombintu/goyametricsv2/internal/config"
+	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"go.uber.org/zap"
 )
 
 type Agent struct {
@@ -72,21 +76,39 @@ func (a *Agent) sendDataOnServer(metricType, metricName string, value string) er
 	return nil
 }
 
-func (a *Agent) RunPoll() {
+func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
-		a.loadMetrics()
-		time.Sleep(time.Duration(a.pollInterval) * time.Second)
+		select {
+		case <-ctx.Done():
+			logger.Log.Debug("worker is shutdown", zap.String("name", "report"))
+			return
+		default:
+			logger.Log.Debug("message from worker", zap.String("name", "report"))
+			for metricName, value := range a.metrics {
+				a.sendDataOnServer(storage.GaugeType, metricName, value)
+			}
+			a.sendDataOnServer(storage.CounterType, "pollCount", strconv.Itoa(a.pollCount))
+			time.Sleep(time.Duration(a.reportInterval) * time.Second)
+		}
 	}
+
 }
 
-func (a *Agent) RunReport() {
+func (a *Agent) RunPoll(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
-		for metricName, value := range a.metrics {
-			a.sendDataOnServer(storage.GaugeType, metricName, value)
+		select {
+		case <-ctx.Done():
+			logger.Log.Debug("worker is shutdown", zap.String("name", "poll"))
+			return
+		default:
+			logger.Log.Debug("message from worker", zap.String("name", "poll"))
+			a.loadMetrics()
+			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
-		a.sendDataOnServer(storage.CounterType, "pollCount", strconv.Itoa(a.pollCount))
-		time.Sleep(time.Duration(a.reportInterval) * time.Second)
 	}
+
 }
 
 func (a *Agent) loadMetrics() {

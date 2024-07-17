@@ -6,88 +6,101 @@ import (
 	"strconv"
 )
 
+const (
+	// Server
+	defaultListen        = "localhost:8080"
+	defaultStorageDriver = "mem"
+	defaultEnvMode       = "dev"
+	// Agent
+	defaultServerURL      = defaultListen
+	defaultReportInterval = 2
+	defaultPollInterval   = 10
+
+	// Server
+	hintListen        = "Server address"
+	hintStorageDriver = "Storage driver"
+	hintEnvMode       = "Enviriment server mode"
+	// Agent
+	hintServerURL      = hintListen
+	hintReportInterval = "Report interval"
+	hintPollInterval   = "Poll interval"
+)
+
 type ServerConfig struct {
 	Listen        string `yaml:"Listen" env-default:"localhost:8080"`
 	StorageDriver string `yaml:"StorageDriver" env-default:"mem"`
+	EnvMode       string `yaml:"EnvMode" env-default:"dev"`
 }
 
 type AgentConfig struct {
 	Address        string `yaml:"address" env-default:"http://localhost:8080"`
 	PollInterval   int64  `yaml:"pollInterval" env-default:"2"`
 	ReportInterval int64  `yaml:"reportInterval" env-default:"10"`
+	EnvMode        string `yaml:"EnvMode" env-default:"dev"`
+}
+
+func tryLoadFromEnv(key, fromFlags string) string {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return fromFlags
+	} else {
+		return value
+	}
+}
+
+func tryLoadFromEnvInt64(key string, fromFlags int64) int64 {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return fromFlags
+	} else {
+		parse64, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fromFlags
+		} else {
+			return parse64
+		}
+	}
 }
 
 func LoadServerConfig() ServerConfig {
 	var config ServerConfig
-	fromFlags := LoadServerConfigFromFlags()
-
-	address, ok := os.LookupEnv("ADDRESS")
-	if !ok {
-		config.Listen = fromFlags.Listen
-	} else {
-		config.Listen = address
-	}
+	fromFlags := loadServerConfigFromFlags()
+	config.Listen = tryLoadFromEnv("ADDRESS", fromFlags.Listen)
 	return config
 }
 
 // Try load Server Config from flags
-func LoadServerConfigFromFlags() ServerConfig {
+func loadServerConfigFromFlags() ServerConfig {
 	var config ServerConfig
-	a := flag.String("a", "localhost:8080", "Server address")
-	s := flag.String("storageDriver", "mem", "Storage driver")
+	a := flag.String("a", defaultListen, hintListen)
+	s := flag.String("storageDriver", defaultStorageDriver, hintStorageDriver)
+	e := flag.String("env", defaultEnvMode, hintEnvMode)
 	flag.Parse()
 
 	config.Listen = *a
 	config.StorageDriver = *s
+	config.EnvMode = *e
 	return config
 }
 
 // Load Agent Config from Environment, if any var empty - load from flags or set default
 func LoadAgentConfig() AgentConfig {
 	var config AgentConfig
-	fromFlags := LoadAgentConfigFromFlags()
+	fromFlags := loadAgentConfigFromFlags()
 
-	address, ok := os.LookupEnv("ADDRESS")
-	if !ok {
-		config.Address = fromFlags.Address
-	} else {
-		config.Address = address
-	}
+	config.Address = tryLoadFromEnv("SERVER_ADDRESS", fromFlags.Address)
+	config.ReportInterval = tryLoadFromEnvInt64("REPORT_INTERVAL", fromFlags.ReportInterval)
+	config.PollInterval = tryLoadFromEnvInt64("POLL_INTERVAL", fromFlags.PollInterval)
 
-	// Try load REPORT_INTERVAL
-	ri, ok := os.LookupEnv("REPORT_INTERVAL")
-	if !ok {
-		config.ReportInterval = fromFlags.ReportInterval
-	} else {
-		parseRI, err := strconv.ParseInt(ri, 10, 64)
-		if err != nil {
-			config.ReportInterval = fromFlags.ReportInterval
-		} else {
-			config.ReportInterval = parseRI
-		}
-	}
-
-	// Try load POLL_INTERVAL
-	pi, ok := os.LookupEnv("POLL_INTERVAL")
-	if !ok {
-		config.PollInterval = fromFlags.PollInterval
-	} else {
-		parsePI, err := strconv.ParseInt(pi, 10, 64)
-		if err != nil {
-			config.PollInterval = fromFlags.PollInterval
-		} else {
-			config.PollInterval = parsePI
-		}
-	}
 	return config
 }
 
 // Try load Server Config from flags
-func LoadAgentConfigFromFlags() AgentConfig {
+func loadAgentConfigFromFlags() AgentConfig {
 	var config AgentConfig
-	a := flag.String("a", "localhost:8080", "Server address")
-	r := flag.Int64("r", 10, "Report interval")
-	p := flag.Int64("p", 2, "Poll interval")
+	a := flag.String("a", defaultServerURL, hintServerURL)
+	r := flag.Int64("r", defaultReportInterval, hintReportInterval)
+	p := flag.Int64("p", defaultPollInterval, hintPollInterval)
 	flag.Parse()
 
 	config.Address = *a

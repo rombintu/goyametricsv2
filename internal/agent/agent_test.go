@@ -7,7 +7,7 @@ import (
 )
 
 func TestAgentLoadMetrics(t *testing.T) {
-	config := config.LoadAgentConfigFromFlags()
+	config := config.LoadAgentConfig()
 	agent := NewAgent(config)
 	agent.loadMetrics()
 	if len(agent.metrics) == 0 {

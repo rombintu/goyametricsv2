@@ -124,7 +124,7 @@ func TestServer_MetricGetHandler(t *testing.T) {
 	s := NewServer(storage, conf)
 	s.ConfigureStorage()
 	s.ConfigureRouter()
-	storage.Driver.Update(counterMetricType, "counter1", "1")
+	storage.Update(counterMetricType, "counter1", "1")
 	type want struct {
 		code        int
 		response    string
