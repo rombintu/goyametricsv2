@@ -87,8 +87,9 @@ func loadServerConfigFromFlags() ServerConfig {
 func LoadAgentConfig() AgentConfig {
 	var config AgentConfig
 	fromFlags := loadAgentConfigFromFlags()
-
-	config.Address = tryLoadFromEnv("SERVER_ADDRESS", fromFlags.Address)
+	// Из тз нужно сделать такое ключевое слово, иначе не проходят тесты
+	// ADDRESS отвечает за адрес эндпоинта HTTP-сервера.
+	config.Address = tryLoadFromEnv("ADDRESS", fromFlags.Address)
 	config.ReportInterval = tryLoadFromEnvInt64("REPORT_INTERVAL", fromFlags.ReportInterval)
 	config.PollInterval = tryLoadFromEnvInt64("POLL_INTERVAL", fromFlags.PollInterval)
 
