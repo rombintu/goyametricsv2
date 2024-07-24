@@ -63,14 +63,16 @@ func RequestLogger(next echo.HandlerFunc) echo.HandlerFunc {
 		res := c.Response()
 
 		duration := time.Since(startTimestamp)
-		Log.Debug("REQEST",
+		Log.Info("REQEST",
 			zap.String("URI", req.URL.Path),
 			zap.String("Method", req.Method),
 			zap.String("Duration", duration.String()),
+			zap.String("Content-Type", req.Header.Get("Content-Type")),
 		)
-		Log.Debug("RESPONSE",
+		Log.Info("RESPONSE",
 			zap.Int("Status Code", res.Status),
 			zap.Int64("Size", res.Size),
+			zap.String("Content-Type", res.Header().Get("Content-Type")),
 		)
 		return err
 	}

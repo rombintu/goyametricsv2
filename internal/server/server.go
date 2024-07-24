@@ -16,6 +16,7 @@ type Server struct {
 	config  config.ServerConfig
 	storage storage.Storage
 	router  *echo.Echo
+	log     zap.Logger
 }
 
 func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
@@ -62,6 +63,10 @@ func (s *Server) ConfigureRouter() {
 	s.router.GET("/", s.RootHandler)
 	s.router.GET("/value/:mtype/:mname", s.MetricGetHandler)
 	s.router.POST("/update/:mtype/:mname/:mvalue", s.MetricsHandler)
+
+	// JSON
+	s.router.POST("/update/", s.MetricUpdateHandlerJSON)
+	s.router.POST("/value/", s.MetricValueHandlerJSON)
 }
 
 func (s *Server) ConfigureMiddlewares() {
