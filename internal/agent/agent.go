@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,10 +14,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/labstack/echo"
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	models "github.com/rombintu/goyametricsv2/internal/models"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"go.uber.org/zap"
 )
 
@@ -54,33 +57,37 @@ func (a *Agent) incPollCount() {
 	a.pollCount++
 }
 
-// Deprecated!
-// func (a *Agent) postRequest(url string) error {
-// 	req, err := http.NewRequest(http.MethodPost, url, nil)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	req.Header.Set("Content-Type", "text/plain")
-// 	client := &http.Client{}
-// 	resp, err := client.Do(req)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	defer resp.Body.Close()
-// 	return nil
-// }
-
 func (a *Agent) postRequestJSON(url string, metricData models.Metrics) error {
-	var buff bytes.Buffer
-	if err := json.NewEncoder(&buff).Encode(metricData); err != nil {
+	jsonData, err := json.Marshal(metricData)
+	if err != nil {
 		return err
 	}
+
+	// Start gzip compression
+	var buff bytes.Buffer
+	gzipWriter, err := gzip.NewWriterLevel(&buff, gzip.BestCompression)
+	if err != nil {
+		logger.Log.Error("failed init compress writer", zap.Error(err))
+		return err
+	}
+	_, err = gzipWriter.Write(jsonData)
+	if err != nil {
+		logger.Log.Error("failed write data to compress temporary buffer", zap.Error(err))
+		return err
+	}
+	gzipWriter.Close()
+
+	// End gzip compression
+
 	req, err := http.NewRequest(http.MethodPost, url, &buff)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
+	// Set header for gzip compression
+	req.Header.Set(echo.HeaderContentEncoding, mygzip.GzipHeader)
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -92,10 +99,6 @@ func (a *Agent) postRequestJSON(url string, metricData models.Metrics) error {
 }
 
 func (a *Agent) sendDataOnServer(metricType, metricName string, value string) error {
-	// Deprecated
-	// url := fmt.Sprintf("%s/update/%s/%s/%s", a.serverAddress, metricType, metricName, value)
-
-	// Actually
 	url := fmt.Sprintf("%s/update/", a.serverAddress)
 	var m models.Metrics
 	m.ID = metricName
@@ -107,7 +110,6 @@ func (a *Agent) sendDataOnServer(metricType, metricName string, value string) er
 	}
 
 	if err := a.postRequestJSON(url, m); err != nil {
-		logger.Log.Error(err.Error())
 		return err
 	}
 	return nil
@@ -122,10 +124,13 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 			return
 		default:
 			logger.Log.Debug("message from worker", zap.String("name", "report"))
+			a.metrics["PollCount"] = strconv.Itoa(a.pollCount)
 			for metricName, value := range a.metrics {
-				a.sendDataOnServer(storage.GaugeType, metricName, value)
+				if err := a.sendDataOnServer(storage.GaugeType, metricName, value); err != nil {
+					logger.Log.Warn("Error sending metrics", zap.String("server", "off"))
+					continue
+				}
 			}
-			a.sendDataOnServer(storage.CounterType, "PollCount", strconv.Itoa(a.pollCount))
 			time.Sleep(time.Duration(a.reportInterval) * time.Second)
 		}
 	}

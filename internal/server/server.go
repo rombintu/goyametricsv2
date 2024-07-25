@@ -1,14 +1,13 @@
 package server
 
 import (
-	"io"
 	"net/http"
-	"text/template"
 
 	"github.com/labstack/echo"
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"go.uber.org/zap"
 )
 
@@ -16,7 +15,6 @@ type Server struct {
 	config  config.ServerConfig
 	storage storage.Storage
 	router  *echo.Echo
-	log     zap.Logger
 }
 
 func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
@@ -44,21 +42,6 @@ func (s *Server) ConfigureStorage() {
 	}
 }
 
-type Template struct {
-	templates *template.Template
-}
-
-func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
-	return t.templates.ExecuteTemplate(w, name, data)
-}
-
-func (s *Server) ConfigureRenderer() {
-	t := &Template{
-		templates: template.Must(template.ParseGlob("internal/templates/*.html")),
-	}
-	s.router.Renderer = t
-}
-
 func (s *Server) ConfigureRouter() {
 	s.router.GET("/", s.RootHandler)
 	s.router.GET("/value/:mtype/:mname", s.MetricGetHandler)
@@ -72,4 +55,12 @@ func (s *Server) ConfigureRouter() {
 func (s *Server) ConfigureMiddlewares() {
 	logger.Initialize(s.config.EnvMode)
 	s.router.Use(logger.RequestLogger)
+
+	// Реализация gzip middleware в пару строк, больше ничего не нужно
+	// s.router.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+	// 	Level: middleware.DefaultGzipConfig.Level,
+	// }))
+
+	// Реализация gzip middleware для тз
+	s.router.Use(mygzip.GzipMiddleware)
 }

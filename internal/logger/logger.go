@@ -67,12 +67,18 @@ func RequestLogger(next echo.HandlerFunc) echo.HandlerFunc {
 			zap.String("URI", req.URL.Path),
 			zap.String("Method", req.Method),
 			zap.String("Duration", duration.String()),
+			// add for Iter7
 			zap.String("Content-Type", req.Header.Get("Content-Type")),
+			// add for Iter8
+			zap.String("Accept-Encoding", req.Header.Get("Accept-Encoding")),
 		)
 		Log.Info("RESPONSE",
 			zap.Int("Status Code", res.Status),
 			zap.Int64("Size", res.Size),
+			// add for Iter7
 			zap.String("Content-Type", res.Header().Get("Content-Type")),
+			// add for Iter8
+			zap.String("Content-Encoding", res.Header().Get("Content-Encoding")),
 		)
 		return err
 	}
