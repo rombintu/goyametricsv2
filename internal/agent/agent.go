@@ -124,12 +124,16 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 			return
 		default:
 			logger.Log.Debug("message from worker", zap.String("name", "report"))
-			a.metrics["PollCount"] = strconv.Itoa(a.pollCount)
+
 			for metricName, value := range a.metrics {
 				if err := a.sendDataOnServer(storage.GaugeType, metricName, value); err != nil {
-					logger.Log.Warn("Error sending metrics", zap.String("server", "off"))
+					logger.Log.Warn("Error sending metrics", zap.String("server", "off"), zap.String("metric", metricName))
 					continue
 				}
+			}
+			if err := a.sendDataOnServer(storage.CounterType, "PollCount", strconv.Itoa(a.pollCount)); err != nil {
+				logger.Log.Warn("Error sending metrics", zap.String("server", "off"), zap.String("metric", "PollCounts"))
+				continue
 			}
 			time.Sleep(time.Duration(a.reportInterval) * time.Second)
 		}
