@@ -8,7 +8,9 @@ const (
 type Storage interface {
 	Update(mtype, mname, mval string) error
 	Get(mtype, mname string) (string, error)
-	GetAll() map[string]interface{}
+	GetAll() Data
+	Save() error
+	Restore() error
 	Open() error
 	Close() error
 }
@@ -17,11 +19,11 @@ type Storage interface {
 // 	Driver Driver
 // }
 
-func NewStorage(storageType string) Storage {
+func NewStorage(storageType string, storepath string) Storage {
 	var storage Storage
 	switch storageType {
 	default:
-		storage = NewMemDriver()
+		storage = NewMemDriver(storepath)
 	}
 	return storage
 }

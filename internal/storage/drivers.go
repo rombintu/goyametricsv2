@@ -1,35 +1,49 @@
 package storage
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
+	"os"
 
 	"strconv"
+
+	"github.com/rombintu/goyametricsv2/internal/logger"
+	"go.uber.org/zap"
 )
 
-type CounterTable map[string]int64
-type GaugeTable map[string]float64
-
-type memDriver struct {
-	data map[string]interface{}
+type Counter struct {
+	Name  string `json:"name"`
+	Value int64  `json:"value"`
+}
+type Gauge struct {
+	Name  string  `json:"name"`
+	Value float64 `json:"value"`
 }
 
-func NewMemDriver() *memDriver {
+type Data struct {
+	Counters []Counter `json:"counter"`
+	Gauges   []Gauge   `json:"gauge"`
+}
+
+type memDriver struct {
+	data      Data
+	storepath string
+}
+
+func NewMemDriver(storepath string) *memDriver {
 	return &memDriver{
-		data: make(
-			map[string]interface{},
-		),
+		data:      Data{},
+		storepath: storepath,
 	}
 }
 
 func (m *memDriver) Open() error {
-	m.data = make(map[string]interface{})
-	m.data[CounterType] = make(CounterTable)
-	m.data[GaugeType] = make(GaugeTable)
 	return nil
 }
 
 func (m *memDriver) Close() error {
-	m.data = nil
+	m.data = Data{}
 	return nil
 }
 
@@ -72,47 +86,96 @@ func (m *memDriver) Get(mtype, mname string) (string, error) {
 }
 
 func (m *memDriver) getCounter(key string) (int64, bool) {
-	data, ok := m.data[CounterType].(CounterTable)
-	if !ok {
-		return 0, false
+	for _, c := range m.data.Counters {
+		if c.Name == key {
+			return c.Value, true
+		}
 	}
-	_, valueIsExist := data[key]
-	if !valueIsExist {
-		return 0, false
-	}
-	return data[key], true
+	return 0, false
 }
 
 func (m *memDriver) getGauge(key string) (float64, bool) {
-	data, ok := m.data[GaugeType].(GaugeTable)
-	if !ok {
-		return 0, false
+	for _, g := range m.data.Gauges {
+		if g.Name == key {
+			return g.Value, true
+		}
 	}
-	_, valueIsExist := data[key]
-	if !valueIsExist {
-		return 0, false
-	}
-	return data[key], true
+	return 0, false
 }
 
 func (m *memDriver) updateGauge(key string, value float64) {
-	data, _ := m.data[GaugeType].(GaugeTable)
-	data[key] = value
-	m.data[GaugeType] = data
+	// update gauge, if exist. Create if not exist
+	for _, g := range m.data.Gauges {
+		if g.Name == key {
+			g.Value = value
+			return
+		}
+	}
+	m.data.Gauges = append(m.data.Gauges, Gauge{Name: key, Value: value})
 }
 
 func (m *memDriver) updateCounter(key string, value int64) {
-	data, _ := m.data[CounterType].(CounterTable)
-	oldValue := data[key]
-	if oldValue == 0 {
-		data[key] = value
-	} else {
-		value = oldValue + value
+	for _, c := range m.data.Counters {
+		if c.Name == key {
+			c.Value += value
+			return
+		}
 	}
-	data[key] = value
-	m.data[CounterType] = data
+	m.data.Counters = append(m.data.Counters, Counter{Name: key, Value: value})
 }
 
-func (m *memDriver) GetAll() map[string]interface{} {
+func (m *memDriver) GetAll() Data {
 	return m.data
+}
+
+func (m *memDriver) Save() error {
+	file, err := os.OpenFile(m.storepath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0660)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	data, err := json.MarshalIndent(m.GetAll(), "", "\t")
+	if err != nil {
+		return err
+	}
+	_, err = file.Write(data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *memDriver) Restore() error {
+	if _, err := os.Stat(m.storepath); errors.Is(err, os.ErrNotExist) {
+		logger.Log.Warn("No data found in store path, skipping restore...")
+		return nil
+	}
+	file, err := os.OpenFile(m.storepath, os.O_RDONLY|os.O_CREATE, 0660)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	fileInfo, err := file.Stat()
+	if err != nil {
+		logger.Log.Warn("Error getting file info, skipping...")
+		return nil
+	}
+
+	if fileInfo.Size() == 0 {
+		logger.Log.Warn("File is empty, skipping restore...")
+		return nil
+	}
+
+	bytesData, err := io.ReadAll(file)
+	if err != nil {
+		logger.Log.Warn(err.Error())
+		return nil
+	}
+
+	err = json.Unmarshal(bytesData, &m.data)
+	if err != nil {
+		logger.Log.Error("Error unmarshalling JSON data", zap.Error(err))
+		return nil
+	}
+	return nil
 }

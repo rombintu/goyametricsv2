@@ -27,15 +27,13 @@ type Agent struct {
 	serverAddress  string
 	pollInterval   int64
 	reportInterval int64
-	data           map[string]interface{}
+	data           storage.Data // TODO
 	pollCount      int
 	metrics        map[string]string
 }
 
 func NewAgent(c config.AgentConfig) *Agent {
-	data := make(map[string]interface{})
-	data[storage.CounterType] = make(storage.CounterTable)
-	data[storage.GaugeType] = make(storage.GaugeTable)
+	data := storage.Data{}
 	return &Agent{
 		serverAddress:  fixServerURL(c.Address),
 		pollInterval:   c.PollInterval,

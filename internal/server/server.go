@@ -25,20 +25,29 @@ func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
 	}
 }
 
-func (s *Server) Start() {
+func (s *Server) Configure() {
 	s.ConfigureRenderer()
 	s.ConfigureMiddlewares()
 	s.ConfigureRouter()
 	s.ConfigureStorage()
+}
+
+func (s *Server) Run() {
 	logger.Log.Info("Server is starting on: ", zap.String("url", s.config.Listen))
 	if err := http.ListenAndServe(s.config.Listen, s.router); err != nil {
-		panic(err)
+		logger.Log.Fatal("cannot run server", zap.Error(err))
 	}
 }
 
 func (s *Server) ConfigureStorage() {
 	if err := s.storage.Open(); err != nil {
 		logger.Log.Error("cannot open storage", zap.Error(err))
+	}
+	// If restore flag is True, then restore the storage
+	if s.config.RestoreFlag {
+		if err := s.storage.Restore(); err != nil {
+			logger.Log.Warn("cannot restore storage", zap.String("error", err.Error()))
+		}
 	}
 }
 
@@ -63,4 +72,21 @@ func (s *Server) ConfigureMiddlewares() {
 
 	// Реализация gzip middleware для тз
 	s.router.Use(mygzip.GzipMiddleware)
+}
+
+func (s *Server) syncStorage() {
+	if err := s.storage.Save(); err != nil {
+		logger.Log.Error("cannot save storage", zap.Error(err))
+	}
+	logger.Log.Debug("Storage synchronized", zap.String("path", s.config.StorePath))
+}
+
+func (s *Server) SyncStorageInterval() {
+	s.syncStorage()
+}
+
+func (s *Server) Shutdown() {
+	logger.Log.Info("Server is shutting down...")
+	s.syncStorage()
+	s.storage.Close()
 }

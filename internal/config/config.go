@@ -11,6 +11,9 @@ const (
 	defaultListen        = "localhost:8080"
 	defaultStorageDriver = "mem"
 	defaultEnvMode       = "dev"
+	defaultStoreInterval = 300
+	defaultStorePath     = "store.json"
+	defaultRestoreFlag   = true
 	// Agent
 	defaultServerURL      = defaultListen
 	defaultReportInterval = 2
@@ -20,6 +23,10 @@ const (
 	hintListen        = "Server address"
 	hintStorageDriver = "Storage driver"
 	hintEnvMode       = "Enviriment server mode"
+	hintStoreInterval = "Interval between saves"
+	hintStorePath     = "Path to store data"
+	hintRestoreFlag   = "Restore data from store?"
+
 	// Agent
 	hintServerURL      = hintListen
 	hintReportInterval = "Report interval"
@@ -30,6 +37,12 @@ type ServerConfig struct {
 	Listen        string `yaml:"Listen" env-default:"localhost:8080"`
 	StorageDriver string `yaml:"StorageDriver" env-default:"mem"`
 	EnvMode       string `yaml:"EnvMode" env-default:"dev"`
+
+	// New
+	StoreInterval int64  `yaml:"StoreInterval" env-default:"300"`
+	StorePath     string `yaml:"StorePath" env-default:"store.json"`
+	RestoreFlag   bool   `yaml:"RestoreFlag" env-default:"true"`
+	SyncMode      bool   `yaml:"SyncMode" env-default:"false"`
 }
 
 type AgentConfig struct {
@@ -62,10 +75,34 @@ func tryLoadFromEnvInt64(key string, fromFlags int64) int64 {
 	}
 }
 
+func tryLoadFromEnvBool(key string, fromFlags bool) bool {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return fromFlags
+	} else {
+		parseBool, err := strconv.ParseBool(value)
+		if err != nil {
+			return fromFlags
+		} else {
+			return parseBool
+		}
+	}
+}
+
 func LoadServerConfig() ServerConfig {
 	var config ServerConfig
 	fromFlags := loadServerConfigFromFlags()
 	config.Listen = tryLoadFromEnv("ADDRESS", fromFlags.Listen)
+	// New args
+	config.StoreInterval = tryLoadFromEnvInt64("STORE_INTERVAL", fromFlags.StoreInterval)
+	config.StorePath = tryLoadFromEnv("STORE_PATH", fromFlags.StorePath)
+	config.RestoreFlag = tryLoadFromEnvBool("RESTORE_FLAG", fromFlags.RestoreFlag)
+
+	// Change to sync mode
+	if config.StoreInterval == 0 {
+		config.SyncMode = true
+	}
+
 	return config
 }
 
@@ -75,11 +112,21 @@ func loadServerConfigFromFlags() ServerConfig {
 	a := flag.String("a", defaultListen, hintListen)
 	s := flag.String("storageDriver", defaultStorageDriver, hintStorageDriver)
 	e := flag.String("env", defaultEnvMode, hintEnvMode)
+
+	// New flags
+	i := flag.Int64("i", defaultStoreInterval, hintStoreInterval)
+	f := flag.String("f", defaultStorePath, hintStorePath)
+	r := flag.Bool("r", defaultRestoreFlag, hintRestoreFlag)
 	flag.Parse()
 
 	config.Listen = *a
 	config.StorageDriver = *s
 	config.EnvMode = *e
+
+	// Parse new flags
+	config.StoreInterval = *i
+	config.StorePath = *f
+	config.RestoreFlag = *r
 	return config
 }
 
