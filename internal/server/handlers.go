@@ -23,6 +23,12 @@ func (s *Server) MetricsHandler(c echo.Context) error {
 	if err := s.storage.Update(mtype, mname, mvalue); err != nil {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
+
+	// Если 0 то синхронная запись. По хорошему это засунуть в мидлварю конечно
+	if s.config.SyncMode {
+		s.syncStorage()
+	}
+
 	return c.String(http.StatusOK, "updated")
 }
 
@@ -78,6 +84,12 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 	if err := s.storage.Update(metric.MType, metric.ID, mvalue); err != nil {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
+
+	// Если 0 то синхронная запись. По хорошему это засунуть в мидлварю конечно
+	if s.config.SyncMode {
+		s.syncStorage()
+	}
+
 	// Костыли для тз
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
 	c.Response().WriteHeader(http.StatusOK)

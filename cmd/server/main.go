@@ -25,19 +25,22 @@ func main() {
 	// Канал для сигнала завершения
 	done := make(chan struct{})
 
-	go func() {
-		ticker := time.NewTicker(time.Duration(config.StoreInterval) * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				server.SyncStorageInterval()
-			case <-done:
-				logger.Log.Debug("worker is shutdown", zap.String("name", "sync_storage"))
-				return
+	// Если не включен режим синхронной записи и интервал записи больше 0, то запускаем воркер синхронизирующий storage
+	if !config.SyncMode || config.StoreInterval > 0 {
+		go func() {
+			ticker := time.NewTicker(time.Duration(config.StoreInterval) * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					server.SyncStorageInterval()
+				case <-done:
+					logger.Log.Debug("worker is shutdown", zap.String("name", "sync_storage"))
+					return
+				}
 			}
-		}
-	}()
+		}()
+	}
 
 	// Канал для перехвата сигналов
 	sigChan := make(chan os.Signal, 1)
