@@ -12,38 +12,38 @@ import (
 	"go.uber.org/zap"
 )
 
-type Counter struct {
-	Name  string `json:"name"`
-	Value int64  `json:"value"`
-}
-type Gauge struct {
-	Name  string  `json:"name"`
-	Value float64 `json:"value"`
-}
+type Counters map[string]int64
+type Gauges map[string]float64
 
 type Data struct {
-	Counters []Counter `json:"counter"`
-	Gauges   []Gauge   `json:"gauge"`
+	Counters Counters `json:"counters"`
+	Gauges   Gauges   `json:"gauges"`
 }
 
 type memDriver struct {
-	data      Data
+	data      *Data
 	storepath string
 }
 
 func NewMemDriver(storepath string) *memDriver {
 	return &memDriver{
-		data:      Data{},
+		data:      &Data{},
 		storepath: storepath,
 	}
 }
 
 func (m *memDriver) Open() error {
+	counters := make(map[string]int64)
+	gauges := make(map[string]float64)
+	m.data = &Data{
+		Counters: counters,
+		Gauges:   gauges,
+	}
 	return nil
 }
 
 func (m *memDriver) Close() error {
-	m.data = Data{}
+	m.data = &Data{}
 	return nil
 }
 
@@ -86,46 +86,36 @@ func (m *memDriver) Get(mtype, mname string) (string, error) {
 }
 
 func (m *memDriver) getCounter(key string) (int64, bool) {
-	for _, c := range m.data.Counters {
-		if c.Name == key {
-			return c.Value, true
-		}
+	value, ok := m.data.Counters[key]
+	if !ok {
+		return 0, false
 	}
-	return 0, false
+	return value, true
 }
 
 func (m *memDriver) getGauge(key string) (float64, bool) {
-	for _, g := range m.data.Gauges {
-		if g.Name == key {
-			return g.Value, true
-		}
+	value, ok := m.data.Gauges[key]
+	if !ok {
+		return 0, false
 	}
-	return 0, false
+	return value, true
 }
 
 func (m *memDriver) updateGauge(key string, value float64) {
-	// update gauge, if exist. Create if not exist
-	for _, g := range m.data.Gauges {
-		if g.Name == key {
-			g.Value = value
-			return
-		}
-	}
-	m.data.Gauges = append(m.data.Gauges, Gauge{Name: key, Value: value})
+	m.data.Gauges[key] = value
 }
 
 func (m *memDriver) updateCounter(key string, value int64) {
-	for _, c := range m.data.Counters {
-		if c.Name == key {
-			c.Value += value
-			return
-		}
+	oldValue, exist := m.getCounter(key)
+	if !exist {
+		m.data.Counters[key] = value
+	} else {
+		m.data.Counters[key] = oldValue + value
 	}
-	m.data.Counters = append(m.data.Counters, Counter{Name: key, Value: value})
 }
 
 func (m *memDriver) GetAll() Data {
-	return m.data
+	return *m.data
 }
 
 func (m *memDriver) Save() error {
@@ -147,7 +137,7 @@ func (m *memDriver) Save() error {
 
 func (m *memDriver) Restore() error {
 	if _, err := os.Stat(m.storepath); errors.Is(err, os.ErrNotExist) {
-		logger.Log.Warn("No data found in store path, skipping restore...")
+		logger.Log.Info("no file found, skipping restore...")
 		return nil
 	}
 	file, err := os.OpenFile(m.storepath, os.O_RDONLY|os.O_CREATE, 0660)
@@ -157,24 +147,24 @@ func (m *memDriver) Restore() error {
 	defer file.Close()
 	fileInfo, err := file.Stat()
 	if err != nil {
-		logger.Log.Warn("Error getting file info, skipping...")
+		logger.Log.Warn("error getting file info, skipping...")
 		return nil
 	}
 
 	if fileInfo.Size() == 0 {
-		logger.Log.Warn("File is empty, skipping restore...")
+		logger.Log.Warn("file is empty, skipping restore...")
 		return nil
 	}
 
 	bytesData, err := io.ReadAll(file)
 	if err != nil {
-		logger.Log.Warn(err.Error())
+		logger.Log.Warn("no data found in store path, skipping restore...")
 		return nil
 	}
 
 	err = json.Unmarshal(bytesData, &m.data)
 	if err != nil {
-		logger.Log.Error("Error unmarshalling JSON data", zap.Error(err))
+		logger.Log.Error("error unmarshalling JSON data", zap.Error(err))
 		return nil
 	}
 	return nil

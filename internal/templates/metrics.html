@@ -8,14 +8,14 @@
 <body>
     <h2>Counter Metrics</h2>
     <ul>
-        {{range $key, $value := .counter}}
+        {{range $key, $value := .Counters}}
             <li><strong>{{ $key }}</strong>: {{ $value }}</li>
         {{end}}
     </ul>
     <br>
     <h2>Gauge Metrics</h2>
     <ul>
-        {{range $key, $value := .gauge}}
+        {{range $key, $value := .Gauges}}
             <li><strong>{{ $key }}</strong>: {{ $value }}</li>
         {{end}}
     </ul>

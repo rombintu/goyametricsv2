@@ -27,19 +27,30 @@ type Agent struct {
 	serverAddress  string
 	pollInterval   int64
 	reportInterval int64
-	data           storage.Data // TODO
+	data           Data // TODO
 	pollCount      int
-	metrics        map[string]string
+}
+
+type Data struct {
+	Counters []Counter
+	Gauges   []Gauge
+}
+
+type Counter struct {
+	name  string
+	value int64
+}
+type Gauge struct {
+	name  string
+	value float64
 }
 
 func NewAgent(c config.AgentConfig) *Agent {
-	data := storage.Data{}
 	return &Agent{
 		serverAddress:  fixServerURL(c.Address),
 		pollInterval:   c.PollInterval,
 		reportInterval: c.ReportInterval,
-		data:           data,
-		metrics:        make(map[string]string),
+		data:           Data{},
 	}
 }
 
@@ -123,9 +134,21 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 		default:
 			logger.Log.Debug("message from worker", zap.String("name", "report"))
 
-			for metricName, value := range a.metrics {
-				if err := a.sendDataOnServer(storage.GaugeType, metricName, value); err != nil {
-					logger.Log.Warn("Error sending metrics", zap.String("server", "off"), zap.String("metric", metricName))
+			for _, cm := range a.data.Counters {
+				if err := a.sendDataOnServer(storage.CounterType, cm.name, strconv.FormatInt(cm.value, 10)); err != nil {
+					logger.Log.Warn("Error sending metrics",
+						zap.String("server", "off"),
+						zap.String("metric", cm.name),
+					)
+					continue
+				}
+			}
+			for _, gm := range a.data.Gauges {
+				if err := a.sendDataOnServer(storage.GaugeType, gm.name, strconv.FormatFloat(gm.value, 'g', -1, 64)); err != nil {
+					logger.Log.Warn("Error sending metrics",
+						zap.String("server", "off"),
+						zap.String("metric", gm.name),
+					)
 					continue
 				}
 			}
@@ -165,18 +188,34 @@ func (a *Agent) loadMetrics() {
 		return
 	}
 	json.Unmarshal(inrec, &metricsInterface)
+
+	var counters []Counter
+	var gauges []Gauge
 	for name, value := range metricsInterface {
 		switch v := value.(type) {
 		case float64:
-			a.metrics[name] = strconv.FormatFloat(v, 'g', -1, 64)
+			gauges = append(gauges, Gauge{
+				name:  name,
+				value: v,
+			})
 		case int64:
-			a.metrics[name] = strconv.FormatInt(v, 10)
+			counters = append(counters, Counter{
+				name:  name,
+				value: v,
+			})
 		}
 
 	}
 
 	// get random float64 value
 	randomValue := rand.Float64()
-	a.metrics["RandomValue"] = strconv.FormatFloat(randomValue, 'f', -1, 64)
+	gauges = append(gauges, Gauge{
+		name:  "RandomValue",
+		value: randomValue,
+	})
 	a.incPollCount()
+
+	a.data.Counters = counters
+	a.data.Gauges = gauges
+
 }

@@ -25,10 +25,13 @@ func Test_memDriver_Save(t *testing.T) {
 			name: "save",
 			fields: fields{
 				data: Data{
-					Counters: []Counter{
-						Counter{
-							Name:  "test",
-							Value: 10},
+					Gauges: map[string]float64{
+						"gauge1": 10.0,
+						"gauge2": 20.0,
+					},
+					Counters: map[string]int64{
+						"counter1": 1,
+						"counter2": 2,
 					},
 				},
 				storepath: "test.json",
@@ -39,7 +42,7 @@ func Test_memDriver_Save(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &memDriver{
-				data:      tt.fields.data,
+				data:      &tt.fields.data,
 				storepath: tt.fields.storepath,
 			}
 			if err := m.Save(); (err != nil) != tt.wantErr {
