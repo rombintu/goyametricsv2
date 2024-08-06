@@ -33,3 +33,6 @@ statictest
 
 test.json
 store.json
+creds
+
+*test.json

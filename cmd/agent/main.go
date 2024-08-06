@@ -15,6 +15,7 @@ import (
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	wg := &sync.WaitGroup{}
 
 	config := config.LoadAgentConfig()

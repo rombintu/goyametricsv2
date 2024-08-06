@@ -2,8 +2,10 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -12,7 +14,7 @@ const (
 	defaultStorageDriver = "mem"
 	defaultEnvMode       = "dev"
 	defaultStoreInterval = 300
-	defaultStorePath     = "store.json"
+	defaultStoragePath   = "store.json"
 	defaultRestoreFlag   = true
 	// Agent
 	defaultServerURL      = defaultListen
@@ -24,7 +26,8 @@ const (
 	hintStorageDriver = "Storage driver"
 	hintEnvMode       = "Enviriment server mode"
 	hintStoreInterval = "Interval between saves"
-	hintStorePath     = "Path to store data"
+	hintStoragePath   = "Path to store data"
+	hintStorageURL    = "URL or Plain creds to database"
 	hintRestoreFlag   = "Restore data from store?"
 
 	// Agent
@@ -33,6 +36,21 @@ const (
 	hintPollInterval   = "Poll interval"
 )
 
+type DatabaseConfig struct {
+	User string `yaml:"db_user"`
+	Pass string `yaml:"db_pass"`
+	Host string `yaml:"db_host" env-default:"localhost"`
+	Port string `yaml:"db_port" env-default:"5432"`
+	Name string `yaml:"db_name" env-default:"metrics"`
+}
+
+func (db *DatabaseConfig) ToPlainText() string {
+	return fmt.Sprintf(
+		"host=%s user=%s password=%s dbname=%s sslmode=disable",
+		db.Host, db.User, db.Pass, db.Name,
+	)
+}
+
 type ServerConfig struct {
 	Listen        string `yaml:"Listen" env-default:"localhost:8080"`
 	StorageDriver string `yaml:"StorageDriver" env-default:"mem"`
@@ -40,9 +58,12 @@ type ServerConfig struct {
 
 	// New
 	StoreInterval int64  `yaml:"StoreInterval" env-default:"300"`
-	StorePath     string `yaml:"StorePath" env-default:"store.json"`
-	RestoreFlag   bool   `yaml:"RestoreFlag" env-default:"true"`
-	SyncMode      bool   `yaml:"SyncMode" env-default:"false"`
+	StoragePath   string `yaml:"StoragePath" env-default:"store.json"`
+
+	StorageURL string `yaml:"StorageURL"`
+
+	RestoreFlag bool `yaml:"RestoreFlag" env-default:"true"`
+	SyncMode    bool `yaml:"SyncMode" env-default:"false"`
 }
 
 type AgentConfig struct {
@@ -95,9 +116,12 @@ func LoadServerConfig() ServerConfig {
 	config.Listen = tryLoadFromEnv("ADDRESS", fromFlags.Listen)
 	// New args
 	config.StoreInterval = tryLoadFromEnvInt64("STORE_INTERVAL", fromFlags.StoreInterval)
-	config.StorePath = tryLoadFromEnv("STORE_PATH", fromFlags.StorePath)
+	config.StoragePath = tryLoadFromEnv("FILE_STORAGE_PATH", fromFlags.StoragePath)
 	config.RestoreFlag = tryLoadFromEnvBool("RESTORE_FLAG", fromFlags.RestoreFlag)
 
+	// increment 10
+	config.StorageDriver = tryLoadFromEnv("STORAGE_DRIVER", fromFlags.StorageDriver)
+	config.StorageURL = tryLoadFromEnv("DATABASE_DSN", fromFlags.StorageURL)
 	// Change to sync mode
 	if config.StoreInterval == 0 {
 		config.SyncMode = true
@@ -110,13 +134,14 @@ func LoadServerConfig() ServerConfig {
 func loadServerConfigFromFlags() ServerConfig {
 	var config ServerConfig
 	a := flag.String("a", defaultListen, hintListen)
-	s := flag.String("storageDriver", defaultStorageDriver, hintStorageDriver)
+	s := flag.String("driver", defaultStorageDriver, hintStorageDriver)
 	e := flag.String("env", defaultEnvMode, hintEnvMode)
 
 	// New flags
 	i := flag.Int64("i", defaultStoreInterval, hintStoreInterval)
-	f := flag.String("f", defaultStorePath, hintStorePath)
+	f := flag.String("f", defaultStoragePath, hintStoragePath)
 	r := flag.Bool("r", defaultRestoreFlag, hintRestoreFlag)
+	d := flag.String("d", "", hintStorageURL)
 	flag.Parse()
 
 	config.Listen = *a
@@ -125,9 +150,22 @@ func loadServerConfigFromFlags() ServerConfig {
 
 	// Parse new flags
 	config.StoreInterval = *i
-	config.StorePath = *f
+	config.StoragePath = *f
 	config.RestoreFlag = *r
+
+	// increment 10
+	config.StorageURL = *d
+
 	return config
+}
+
+func (c *ServerConfig) StoragePathAuto() bool {
+	if len(strings.Split(c.StoragePath, " ")) < 4 && c.StorageDriver != defaultStorageDriver && c.StorageURL == "" {
+		dbConfig := loadDatabaseConfig()
+		c.StorageURL = dbConfig.ToPlainText()
+		return true
+	}
+	return false
 }
 
 // Load Agent Config from Environment, if any var empty - load from flags or set default
@@ -156,4 +194,14 @@ func loadAgentConfigFromFlags() AgentConfig {
 	config.PollInterval = *p
 
 	return config
+}
+
+func loadDatabaseConfig() DatabaseConfig {
+	var dbConfig DatabaseConfig
+	dbConfig.Host = os.Getenv("DB_HOST")
+	dbConfig.Port = os.Getenv("DB_PORT")
+	dbConfig.User = os.Getenv("DB_USER")
+	dbConfig.Pass = os.Getenv("DB_PASS")
+	dbConfig.Name = os.Getenv("DB_NAME")
+	return dbConfig
 }

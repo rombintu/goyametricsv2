@@ -30,3 +30,13 @@ git fetch template && git checkout template/main .github
 При мёрже ветки с инкрементом в основную ветку `main` будут запускаться все автотесты.
 
 Подробнее про локальный и автоматический запуск читайте в [README автотестов](https://github.com/Yandex-Practicum/go-autotests).
+
+
+## Запуск сервера
+```bash
+psql -U <username> -W -d postgres -h 127.0.0.1 < ./internal/storage/create_table_metrics.sql # Change credentials
+
+...
+
+go run ./cmd/server/main.go --driver pgx -d "<creds for psql>"
+```

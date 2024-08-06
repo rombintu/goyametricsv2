@@ -20,9 +20,9 @@ func TestServer_updateMetrics(t *testing.T) {
 	e := echo.New()
 	conf := config.ServerConfig{
 		StorageDriver: "mem",
-		StorePath:     "test.json",
+		StoragePath:   "test.json",
 	}
-	storage := storage.NewStorage(conf.StorageDriver, conf.StorePath)
+	storage := storage.NewStorage(conf.StorageDriver, conf.StoragePath)
 	s := NewServer(storage, conf)
 	s.ConfigureStorage()
 	s.ConfigureRouter()
@@ -120,9 +120,9 @@ func TestServer_MetricGetHandler(t *testing.T) {
 	e := echo.New()
 	conf := config.ServerConfig{
 		StorageDriver: "mem",
-		StorePath:     "test.json",
+		StoragePath:   "test.json",
 	}
-	storage := storage.NewStorage(conf.StorageDriver, conf.StorePath)
+	storage := storage.NewStorage(conf.StorageDriver, conf.StoragePath)
 	s := NewServer(storage, conf)
 	s.ConfigureStorage()
 	s.ConfigureRouter()

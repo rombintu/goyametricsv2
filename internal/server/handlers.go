@@ -108,24 +108,6 @@ func (s *Server) MetricValueHandlerJSON(c echo.Context) error {
 		return c.String(http.StatusNotFound, "not found")
 	}
 
-	// var counterValue int64
-	// var gaugeValue float64
-
-	// // Взависимости от типа парсим нужное значение
-	// switch metric.MType {
-	// case storage.GaugeType:
-	// 	if gaugeValue, err = strconv.ParseFloat(mvalue, 64); err != nil {
-	// 		return c.String(http.StatusBadRequest, err.Error())
-	// 	}
-	// case storage.CounterType:
-	// 	if counterValue, err = strconv.ParseInt(mvalue, 10, 64); err != nil {
-	// 		return c.String(http.StatusBadRequest, err.Error())
-	// 	}
-	// }
-
-	// metric.Delta = &counterValue
-	// metric.Value = &gaugeValue
-
 	// Функция чтобы не повторяться в агенте
 	if err := metric.SetValueOrDelta(mvalue); err != nil {
 		return c.String(http.StatusBadRequest, err.Error())
@@ -134,4 +116,12 @@ func (s *Server) MetricValueHandlerJSON(c echo.Context) error {
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
 	c.Response().WriteHeader(http.StatusOK)
 	return json.NewEncoder(c.Response()).Encode(metric)
+}
+
+// route for /ping. Content-Type: application/json
+func (s *Server) PingDatabase(c echo.Context) error {
+	if err := s.storage.Ping(); err != nil {
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+	return c.String(http.StatusOK, "OK")
 }

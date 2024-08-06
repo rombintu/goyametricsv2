@@ -35,6 +35,8 @@ func (s *Server) Configure() {
 func (s *Server) Run() {
 	logger.Log.Info("Server is starting on: ", zap.String("url", s.config.Listen))
 	if err := http.ListenAndServe(s.config.Listen, s.router); err != nil {
+		// if error. Close connection or clear tmp
+		s.storage.Close()
 		logger.Log.Fatal("cannot run server", zap.Error(err))
 	}
 }
@@ -49,6 +51,10 @@ func (s *Server) ConfigureStorage() {
 			logger.Log.Warn("cannot restore storage", zap.String("error", err.Error()))
 		}
 	}
+	logger.Log.Debug("Storage configuration",
+		zap.String("driver", s.config.StorageDriver),
+		zap.String("path", s.config.StoragePath),
+	)
 }
 
 func (s *Server) ConfigureRouter() {
@@ -59,6 +65,8 @@ func (s *Server) ConfigureRouter() {
 	// JSON
 	s.router.POST("/update/", s.MetricUpdateHandlerJSON)
 	s.router.POST("/value/", s.MetricValueHandlerJSON)
+
+	s.router.GET("/ping", s.PingDatabase)
 }
 
 func (s *Server) ConfigureMiddlewares() {
@@ -78,15 +86,23 @@ func (s *Server) syncStorage() {
 	if err := s.storage.Save(); err != nil {
 		logger.Log.Error("cannot save storage", zap.Error(err))
 	}
-	logger.Log.Debug("Storage synchronized", zap.String("path", s.config.StorePath))
+	logger.Log.Debug("Storage synchronized", zap.String("path", s.config.StoragePath))
 }
 
+// Для дальнейшего расширения кода
 func (s *Server) SyncStorageInterval() {
+	if err := s.storage.Ping(); err != nil {
+		return
+	}
 	s.syncStorage()
 }
 
 func (s *Server) Shutdown() {
 	logger.Log.Info("Server is shutting down...")
 	s.syncStorage()
-	s.storage.Close()
+
+	// Close storage pools on shutdown
+	if err := s.storage.Close(); err != nil {
+		logger.Log.Error("cannot close storage", zap.Error(err))
+	}
 }

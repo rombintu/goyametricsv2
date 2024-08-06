@@ -15,7 +15,14 @@ import (
 
 func main() {
 	config := config.LoadServerConfig()
-	storage := storage.NewStorage(config.StorageDriver, config.StorePath)
+
+	// Костыли чтобы подогнать ТЗ под нормальный код
+	// Считаю что необязательно создавать новую переменную StorageURL (DATABASE_DSN) если есть StoragePath
+	if config.StoragePathAuto() {
+		config.StoragePath = config.StorageURL
+	}
+
+	storage := storage.NewStorage(config.StorageDriver, config.StoragePath)
 	server := server.NewServer(storage, config)
 	server.Configure()
 	go server.Run()
