@@ -18,7 +18,7 @@ func main() {
 
 	// Костыли чтобы подогнать ТЗ под нормальный код
 	// Считаю что необязательно создавать новую переменную StorageURL (DATABASE_DSN) если есть StoragePath
-	if config.StoragePathAuto() {
+	if config.StoragePathAuto() || config.StorageURL != "" {
 		config.StoragePath = config.StorageURL
 	}
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 )
 
 const (
@@ -160,7 +159,7 @@ func loadServerConfigFromFlags() ServerConfig {
 }
 
 func (c *ServerConfig) StoragePathAuto() bool {
-	if len(strings.Split(c.StoragePath, " ")) < 4 && c.StorageDriver != defaultStorageDriver && c.StorageURL == "" {
+	if c.StorageDriver != defaultStorageDriver && c.StorageURL == "" {
 		dbConfig := loadDatabaseConfig()
 		c.StorageURL = dbConfig.ToPlainText()
 		return true
