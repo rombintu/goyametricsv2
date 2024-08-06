@@ -10,16 +10,14 @@ func Test_tmpDriver_Save(t *testing.T) {
 		storepath string
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
+		name   string
+		fields fields
 	}{
 		{
-			name: "save empty",
+			name: "saveEmpty",
 			fields: fields{
 				storepath: "test.json",
 			},
-			wantErr: false,
 		},
 		{
 			name: "save",
@@ -36,7 +34,6 @@ func Test_tmpDriver_Save(t *testing.T) {
 				},
 				storepath: "test.json",
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -45,8 +42,8 @@ func Test_tmpDriver_Save(t *testing.T) {
 				data:      &tt.fields.data,
 				storepath: tt.fields.storepath,
 			}
-			if err := m.Save(); (err != nil) != tt.wantErr {
-				t.Errorf("tmpDriver.Save() error = %v, wantErr %v", err, tt.wantErr)
+			if err := m.Save(); err != nil {
+				t.Errorf("tmpDriver.Save() error = %v", err)
 			}
 		})
 	}
@@ -58,16 +55,14 @@ func Test_tmpDriver_Restore(t *testing.T) {
 		storepath string
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
+		name   string
+		fields fields
 	}{
 		{
 			name: "restore",
 			fields: fields{
 				storepath: "test.json",
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -76,14 +71,14 @@ func Test_tmpDriver_Restore(t *testing.T) {
 				data:      &tt.fields.data,
 				storepath: tt.fields.storepath,
 			}
-			if err := m.Restore(); (err != nil) != tt.wantErr {
-				t.Errorf("tmpDriver.Restore() error = %v, wantErr %v", err, tt.wantErr)
+			if err := m.Restore(); err != nil {
+				t.Errorf("tmpDriver.Restore() error = %v", err)
 			}
-			if len(m.data.Counters) != 1 {
-				t.Error("tmpDriver.Restore() data not restored")
+			if len(m.data.Counters) != 2 {
+				t.Error("tmpDriver.Restore() len Counters not 2")
 			}
-			if _, ok := m.getCounter("foo"); !ok {
-				t.Error("tmpDriver.Restore() 'foo' data not restored")
+			if _, ok := m.getCounter("counter2"); !ok {
+				t.Error("tmpDriver.Restore() 'counter2' data not restored")
 			}
 		})
 	}

@@ -6,16 +6,38 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const (
+	pgxName = "postgres"
+)
+
 type pgxDriver struct {
+	name  string
 	dbURL string
 	Conn  *pgx.Conn
 }
 
 func NewPgxDriver(dbURL string) *pgxDriver {
 	return &pgxDriver{
+		name:  pgxName,
 		dbURL: dbURL,
 	}
 }
+
+// На будущее, возможно придется переделывать на что то такое
+
+// func Initialize(dbURL string) (*sql.DB, error) {
+// 	db, err := sql.Open(pgxName, dbURL)
+// 	if err != nil {
+// 		log.Fatalf("Error opening database: %v", err)
+// 	}
+// 	// Set the maximum number of open connections
+// 	db.SetMaxOpenConns(25)
+// 	// Set the maximum number of idle connections
+// 	db.SetMaxIdleConns(25)
+// 	// Set the maximum lifetime of a connection
+// 	db.SetConnMaxLifetime(5 * time.Minute)
+// 	return db, nil
+// }
 
 func (d *pgxDriver) Open() error {
 	conn, err := pgx.Connect(context.Background(), d.dbURL)
