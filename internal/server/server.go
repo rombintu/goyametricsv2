@@ -43,7 +43,7 @@ func (s *Server) Run() {
 
 func (s *Server) ConfigureStorage() {
 	if err := s.storage.Open(); err != nil {
-		logger.Log.Error("cannot open storage", zap.Error(err))
+		logger.Log.Fatal("cannot open storage", zap.Error(err))
 	}
 	// If restore flag is True, then restore the storage
 	if s.config.RestoreFlag {

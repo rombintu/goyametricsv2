@@ -20,14 +20,15 @@ func main() {
 	// Считаю что необязательно создавать новую переменную StorageURL (DATABASE_DSN) если есть StoragePath
 	if config.StoragePathAuto() || config.StorageURL != "" {
 		config.StoragePath = config.StorageURL
+		// Какой то прикол чтобы тесты прошли. Если указан URL то использовать pgx driver
+		config.StorageDriver = storage.PgxDriver
+		config.StorageDriver = "pgx"
 	}
 
 	storage := storage.NewStorage(config.StorageDriver, config.StoragePath)
 	server := server.NewServer(storage, config)
 	server.Configure()
 	go server.Run()
-
-	// Не очень разбираюсь в каналах, беру примеры из инета и подгоняю
 
 	// Канал для сигнала завершения
 	done := make(chan struct{})
