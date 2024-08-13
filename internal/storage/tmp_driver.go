@@ -33,8 +33,8 @@ func NewTmpDriver(storepath string) *tmpDriver {
 }
 
 func (d *tmpDriver) Open() error {
-	counters := make(map[string]int64)
-	gauges := make(map[string]float64)
+	counters := make(Counters)
+	gauges := make(Gauges)
 	d.data = &Data{
 		Counters: counters,
 		Gauges:   gauges,
@@ -60,11 +60,11 @@ func (d *tmpDriver) Update(mtype, mname, mvalue string) (err error) {
 		}
 		d.updateGauge(mname, value)
 	case CounterType:
-		var value int
-		if value, err = strconv.Atoi(mvalue); err != nil {
+		var value int64
+		if value, err = strconv.ParseInt(mvalue, 10, 64); err != nil {
 			return err
 		}
-		d.updateCounter(mname, int64(value))
+		d.updateCounter(mname, value)
 	default:
 		return errors.New("invalid metric type")
 	}
@@ -113,9 +113,9 @@ func (d *tmpDriver) updateCounter(key string, value int64) {
 	oldValue, exist := d.getCounter(key)
 	if !exist {
 		d.data.Counters[key] = value
-	} else {
-		d.data.Counters[key] = oldValue + value
+		return
 	}
+	d.data.Counters[key] = oldValue + value
 }
 
 func (d *tmpDriver) GetAll() Data {

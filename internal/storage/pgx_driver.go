@@ -151,11 +151,11 @@ func (d *pgxDriver) GetAll() Data {
 		}
 		switch mtype {
 		case CounterType:
-			var value int
-			if value, err = strconv.Atoi(mvalue); err != nil {
+			var value int64
+			if value, err = strconv.ParseInt(mvalue, 10, 64); err != nil {
 				return data
 			}
-			counters[mname] = int64(value)
+			counters[mname] = value
 		case GaugeType:
 			var value float64
 			if value, err = strconv.ParseFloat(mvalue, 64); err != nil {

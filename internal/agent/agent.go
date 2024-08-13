@@ -136,24 +136,24 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 
 			for _, cm := range a.data.Counters {
 				if err := a.sendDataOnServer(storage.CounterType, cm.name, strconv.FormatInt(cm.value, 10)); err != nil {
-					logger.Log.Warn("Error sending metrics",
-						zap.String("server", "off"),
-						zap.String("metric", cm.name),
-					)
+					// logger.Log.Warn("Error sending metrics",
+					// 	zap.String("server", "off"),
+					// 	zap.String("metric", cm.name),
+					// )
 					continue
 				}
 			}
 			for _, gm := range a.data.Gauges {
 				if err := a.sendDataOnServer(storage.GaugeType, gm.name, strconv.FormatFloat(gm.value, 'g', -1, 64)); err != nil {
-					logger.Log.Warn("Error sending metrics",
-						zap.String("server", "off"),
-						zap.String("metric", gm.name),
-					)
+					// logger.Log.Warn("Error sending metrics",
+					// 	zap.String("server", "off"),
+					// 	zap.String("metric", gm.name),
+					// )
 					continue
 				}
 			}
 			if err := a.sendDataOnServer(storage.CounterType, "PollCount", strconv.Itoa(a.pollCount)); err != nil {
-				logger.Log.Warn("Error sending metrics", zap.String("server", "off"), zap.String("metric", "PollCounts"))
+				// logger.Log.Warn("Error sending metrics", zap.String("server", "off"), zap.String("metric", "PollCounts"))
 				continue
 			}
 			time.Sleep(time.Duration(a.reportInterval) * time.Second)

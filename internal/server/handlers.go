@@ -22,6 +22,12 @@ func (s *Server) MetricsHandler(c echo.Context) error {
 		return c.String(http.StatusNotFound, "Missing metric name")
 	}
 	if err := s.storage.Update(mtype, mname, mvalue); err != nil {
+		logger.Log.Error(
+			err.Error(),
+			zap.String("type", mtype),
+			zap.String("id/name", mname),
+			zap.String("value", mvalue),
+		)
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
@@ -38,6 +44,7 @@ func (s *Server) MetricGetHandler(c echo.Context) error {
 	mname := c.Param("mname")
 	value, err := s.storage.Get(mtype, mname)
 	if err != nil {
+		logger.Log.Error(err.Error(), zap.String("type", mtype), zap.String("id/name", mname))
 		return c.String(http.StatusNotFound, "not found")
 	}
 	return c.String(http.StatusOK, value)
@@ -59,6 +66,7 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 	// return c.JSON(http.StatusOK, metric)
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&metric); err != nil {
+		logger.Log.Error(err.Error())
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
@@ -66,9 +74,8 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 		"Try decode metric",
 		zap.String("id", metric.ID),
 		zap.String("mtype", metric.MType),
-		// Далее код не работает, тк есть omitempty
-		// zap.Int64("delta", *metric.Delta),
-		// zap.Float64("value", *metric.Value),
+		zap.Any("delta", metric.Delta),
+		zap.Any("value", metric.Value),
 	)
 
 	// Создаем ошибку для обработки пустых значения
@@ -96,6 +103,10 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 	logger.Log.Debug("Parse", zap.String("value", mvalue))
 
 	if err := s.storage.Update(metric.MType, metric.ID, mvalue); err != nil {
+		logger.Log.Error(
+			err.Error(), zap.String("type", metric.MType),
+			zap.String("id", metric.ID), zap.String("value", mvalue),
+		)
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
@@ -115,15 +126,18 @@ func (s *Server) MetricValueHandlerJSON(c echo.Context) error {
 	var metric models.Metrics
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&metric); err != nil {
+		logger.Log.Error(err.Error())
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 	mvalue, err := s.storage.Get(metric.MType, metric.ID)
 	if err != nil {
+		logger.Log.Error(err.Error(), zap.String("type", metric.MType), zap.String("id", metric.ID))
 		return c.String(http.StatusNotFound, "not found")
 	}
 
 	// Функция чтобы не повторяться в агенте
 	if err := metric.SetValueOrDelta(mvalue); err != nil {
+		logger.Log.Error(err.Error(), zap.String("value", mvalue))
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
