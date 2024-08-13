@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -92,12 +93,24 @@ func (d *pgxDriver) Restore() error {
 }
 
 func (d *pgxDriver) Update(mtype, mname, mval string) error {
-	_, err := d.exec(context.Background(), `
-	INSERT INTO metrics (mtype, mname, mvalue) 
-	VALUES ($1, $2, $3) 
-	ON CONFLICT (mname) DO 
-	UPDATE SET mvalue = EXCLUDED.mvalue
-	`, mtype, mname, mval)
+	var sqlScript string
+	switch mtype {
+	case CounterType:
+		sqlScript = `
+		INSERT INTO metrics (mtype, mname, mvalue) 
+		VALUES ($1, $2, $3) 
+		ON CONFLICT (mname) DO 
+		UPDATE SET mvalue = EXCLUDED.mvalue::int + metrics.mvalue::int
+		`
+	case GaugeType:
+		sqlScript = `
+		INSERT INTO metrics (mtype, mname, mvalue) 
+		VALUES ($1, $2, $3) 
+		ON CONFLICT (mname) DO 
+		UPDATE SET mvalue = EXCLUDED.mvalue
+		`
+	}
+	_, err := d.exec(context.Background(), sqlScript, mtype, mname, mval)
 	return err
 }
 
@@ -120,7 +133,44 @@ func (d *pgxDriver) Get(mtype, mname string) (string, error) {
 }
 
 func (d *pgxDriver) GetAll() Data {
-	return Data{}
+	var data Data
+	rows, err := d.queryRows(context.Background(), `SELECT mtype, mname, mvalue FROM metrics`)
+	if err != nil {
+		logger.Log.Error(err.Error())
+		return data
+	}
+	defer rows.Close()
+
+	counters := make(map[string]int64)
+	gauges := make(map[string]float64)
+	for rows.Next() {
+		var mtype, mname, mvalue string
+		if err = rows.Scan(&mtype, &mname, &mvalue); err != nil {
+			logger.Log.Error(err.Error())
+			return data
+		}
+		switch mtype {
+		case CounterType:
+			var value int
+			if value, err = strconv.Atoi(mvalue); err != nil {
+				return data
+			}
+			counters[mname] = int64(value)
+		case GaugeType:
+			var value float64
+			if value, err = strconv.ParseFloat(mvalue, 64); err != nil {
+				return data
+			}
+			gauges[mname] = value
+		}
+	}
+	err = rows.Err()
+	if err != nil {
+		return data
+	}
+	data.Counters = counters
+	data.Gauges = gauges
+	return data
 }
 
 func (d *pgxDriver) createTables() error {

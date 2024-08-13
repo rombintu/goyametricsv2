@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/rombintu/goyametricsv2/internal/storage"
 )
 
 const (
@@ -124,6 +126,10 @@ func LoadServerConfig() ServerConfig {
 	// Change to sync mode
 	if config.StoreInterval == 0 {
 		config.SyncMode = true
+	}
+
+	if config.StorageURL != "" {
+		config.StorageDriver = storage.PgxDriver
 	}
 
 	return config

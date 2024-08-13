@@ -26,6 +26,8 @@ const (
 	S3Driver = "s3"
 )
 
+const memPath string = ""
+
 type Storage interface {
 	Update(mtype, mname, mval string) error
 	Get(mtype, mname string) (string, error)
@@ -42,8 +44,10 @@ func NewStorage(storageType string, storepath string) Storage {
 	switch storageType {
 	case PgxDriver:
 		storage = NewPgxDriver(storepath)
+	case FileDriver:
+		storage = NewTmpDriver(storepath)
 	default:
-		storage = NewtmpDriver(storepath)
+		storage = NewTmpDriver(memPath)
 	}
 	return storage
 }

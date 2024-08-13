@@ -25,7 +25,7 @@ type tmpDriver struct {
 	storepath string
 }
 
-func NewtmpDriver(storepath string) *tmpDriver {
+func NewTmpDriver(storepath string) *tmpDriver {
 	return &tmpDriver{
 		data:      &Data{},
 		storepath: storepath,
@@ -123,6 +123,11 @@ func (d *tmpDriver) GetAll() Data {
 }
 
 func (d *tmpDriver) Save() error {
+
+	if d.storepath == memPath {
+		return nil
+	}
+
 	file, err := os.OpenFile(d.storepath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0660)
 	if err != nil {
 		return err
@@ -140,6 +145,11 @@ func (d *tmpDriver) Save() error {
 }
 
 func (d *tmpDriver) Restore() error {
+
+	if d.storepath == memPath {
+		return nil
+	}
+
 	if _, err := os.Stat(d.storepath); errors.Is(err, os.ErrNotExist) {
 		logger.Log.Info("no file found, skipping restore...")
 		return nil

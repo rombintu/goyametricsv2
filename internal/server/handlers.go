@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -70,12 +71,25 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 		// zap.Float64("value", *metric.Value),
 	)
 
+	// Создаем ошибку для обработки пустых значения
+	err := errors.New("delta or value must be not null")
+
 	var mvalue string
 	// Парсим то что нужно, взависимости от типа, делаем строку чтобы не менять логику
 	switch metric.MType {
 	case storage.GaugeType:
+		if metric.Value == nil {
+			logger.Log.Error(err.Error())
+			return c.String(http.StatusBadRequest, err.Error())
+		}
+		// Если все ок то парсим
 		mvalue = strconv.FormatFloat(*metric.Value, 'g', -1, 64)
 	case storage.CounterType:
+		if metric.Delta == nil {
+			logger.Log.Error(err.Error())
+			return c.String(http.StatusBadRequest, err.Error())
+		}
+		// Если все ок то парсим
 		mvalue = strconv.FormatInt(*metric.Delta, 10)
 	}
 
