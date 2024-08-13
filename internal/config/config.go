@@ -130,6 +130,8 @@ func LoadServerConfig() ServerConfig {
 
 	if config.StorageURL != "" {
 		config.StorageDriver = storage.PgxDriver
+	} else if config.StoragePath != "" {
+		config.StorageDriver = storage.FileDriver
 	}
 
 	return config
