@@ -122,6 +122,16 @@ func (d *tmpDriver) GetAll() Data {
 	return *d.data
 }
 
+func (d *tmpDriver) UpdateAll(data Data) error {
+	for k, v := range data.Counters {
+		d.updateCounter(k, v)
+	}
+	for k, v := range data.Gauges {
+		d.updateGauge(k, v)
+	}
+	return nil
+}
+
 func (d *tmpDriver) Save() error {
 
 	if d.storepath == memPath {

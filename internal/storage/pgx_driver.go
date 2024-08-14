@@ -23,6 +23,8 @@ type pgxDriver struct {
 	conn  *pgxpool.Pool
 }
 
+type AnyMetrics map[string]string
+
 // Декораторы, чтобы логировать SQL
 func (d *pgxDriver) exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	logger.Log.Debug(sql, zap.Any("args", args))
@@ -132,6 +134,7 @@ func (d *pgxDriver) Get(mtype, mname string) (string, error) {
 	return "", errors.New("not found")
 }
 
+// TODO: нужны тесты, не хватает времени
 func (d *pgxDriver) GetAll() Data {
 	var data Data
 	rows, err := d.queryRows(context.Background(), `SELECT mtype, mname, mvalue FROM metrics`)
@@ -171,6 +174,55 @@ func (d *pgxDriver) GetAll() Data {
 	data.Counters = counters
 	data.Gauges = gauges
 	return data
+}
+
+func (d *pgxDriver) UpdateAll(data Data) error {
+	ctx := context.Background()
+	counters := counters2Any(data.Counters)
+	gauges := gauges2Any(data.Gauges)
+	if err := d.updateAny(ctx, counters, CounterType); err != nil {
+		return err
+	}
+	if err := d.updateAny(ctx, gauges, GaugeType); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *pgxDriver) updateAny(ctx context.Context, m AnyMetrics, mtype string) error {
+	tx, err := d.conn.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var sqlScript string
+	switch mtype {
+	case CounterType:
+		sqlScript = `
+		INSERT INTO metrics (mtype, mname, mvalue) 
+		VALUES ($1, $2, $3) 
+		ON CONFLICT (mname) DO 
+		UPDATE SET mvalue = EXCLUDED.mvalue::int + metrics.mvalue::int 
+		`
+	case GaugeType:
+		sqlScript = `
+		INSERT INTO metrics (mtype, mname, mvalue) 
+		VALUES ($1, $2, $3) 
+		ON CONFLICT (mname) DO 
+		UPDATE SET mvalue = EXCLUDED.mvalue
+		`
+	default:
+		return errors.New("invalid metric type")
+	}
+
+	for mname, mvalue := range m {
+		_, err := tx.Exec(ctx, sqlScript, mtype, mname, mvalue)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (d *pgxDriver) createTables() error {

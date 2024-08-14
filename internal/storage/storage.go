@@ -1,5 +1,7 @@
 package storage
 
+import "strconv"
+
 const (
 	GaugeType   = "gauge"
 	CounterType = "counter"
@@ -31,6 +33,10 @@ const memPath string = ""
 type Storage interface {
 	Update(mtype, mname, mval string) error
 	Get(mtype, mname string) (string, error)
+
+	// inc 12
+	UpdateAll(Data) error
+
 	GetAll() Data
 	Save() error
 	Restore() error
@@ -51,3 +57,24 @@ func NewStorage(storageType string, storepath string) Storage {
 	}
 	return storage
 }
+
+// Lib tools
+func counters2Any(source Counters) AnyMetrics {
+	newMap := make(AnyMetrics)
+	for k, v := range source {
+		newMap[k] = strconv.FormatInt(v, 10)
+	}
+	return newMap
+}
+
+func gauges2Any(source Gauges) AnyMetrics {
+	newMap := make(AnyMetrics)
+	for k, v := range source {
+		newMap[k] = strconv.FormatFloat(v, 'g', -1, 64)
+	}
+	return newMap
+}
+
+// func checkUniqueCounters(counters Counters) bool {
+
+// }

@@ -66,6 +66,8 @@ func (s *Server) ConfigureRouter() {
 	s.router.POST("/update/", s.MetricUpdateHandlerJSON)
 	s.router.POST("/value/", s.MetricValueHandlerJSON)
 
+	s.router.POST("/updates/", s.MetricUpdatesHandlerJSON)
+
 	s.router.GET("/ping", s.PingDatabase)
 }
 
