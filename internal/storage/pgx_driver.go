@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -65,13 +66,20 @@ func NewPgxDriver(dbURL string) *pgxDriver {
 // }
 
 func (d *pgxDriver) Open() error {
-	pool, err := pgxpool.New(context.Background(), d.dbURL)
+	var err error
+	var pool *pgxpool.Pool
+	pool, err = pgxpool.New(context.Background(), d.dbURL)
 	if err != nil {
 		return err
 	}
 	d.conn = pool
 
-	if err := d.createTables(); err != nil {
+	var pgErr *pgconn.PgError
+	err = d.createTables()
+	if errors.As(err, &pgErr) && pgerrcode.IsConnectionException(pgErr.Code) {
+		logger.Log.Warn(pgerrcode.ConnectionFailure, zap.Int("attemp", 1))
+		return err
+	} else if err != nil {
 		return err
 	}
 	return nil
