@@ -232,3 +232,12 @@ func (a *Agent) loadMetrics() {
 	a.data.Gauges = gauges
 
 }
+
+func (a *Agent) Ping() error {
+	resp, err := http.Get(a.serverAddress + "/ping")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}

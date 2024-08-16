@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"time"
 
-	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -66,20 +66,43 @@ func NewPgxDriver(dbURL string) *pgxDriver {
 // }
 
 func (d *pgxDriver) Open() error {
-	var err error
-	var pool *pgxpool.Pool
-	pool, err = pgxpool.New(context.Background(), d.dbURL)
+	pool, err := pgxpool.New(context.Background(), d.dbURL)
 	if err != nil {
 		return err
 	}
 	d.conn = pool
 
-	var pgErr *pgconn.PgError
+	// Почему то такая схема не работает. TODO
+	// var pgErr *pgconn.PgError
+	// Try connect to database
+	// if _, errConn = d.conn.Acquire(context.Background()); errConn != nil {
+	// if errors.As(err, &pgErr) {
+	// 	logger.Log.Debug("Error is a pgconn.PgError", zap.String("code", pgErr.Code))
+	// 	if pgerrcode.IsConnectionException(pgErr.Code) {
+	// 		logger.Log.Debug(pgerrcode.ConnectionFailure, zap.Int("attemp", 1))
+	// 		return err
+	// 	}
+	// } else {
+	// 	return err
+	// }
+
+	// }
+	var errConn error
+	var ok bool
+	for i := 1; i <= 5; i += 2 {
+		if errConn = d.Ping(); errConn == nil {
+			ok = true
+			break
+		}
+		logger.Log.Debug("Try reconnect to database", zap.Int("sleep seconds", i))
+		time.Sleep(time.Duration(i) * time.Second)
+	}
+	if !ok {
+		return errConn
+	}
+
 	err = d.createTables()
-	if errors.As(err, &pgErr) && pgerrcode.IsConnectionException(pgErr.Code) {
-		logger.Log.Warn(pgerrcode.ConnectionFailure, zap.Int("attemp", 1))
-		return err
-	} else if err != nil {
+	if err != nil {
 		return err
 	}
 	return nil
