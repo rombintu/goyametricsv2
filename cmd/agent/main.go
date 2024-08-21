@@ -18,11 +18,18 @@ func main() {
 	defer cancel()
 	wg := &sync.WaitGroup{}
 
-	config := config.LoadAgentConfig()
-	a := agent.NewAgent(config)
+	conf := config.LoadAgentConfig()
 
-	logger.Initialize(config.EnvMode)
-	logger.Log.Info("Agent starting", zap.String("address", config.Address))
+	confInfo, err := config.ToYaml(conf)
+	if err != nil {
+		logger.Log.Error(err.Error())
+	}
+	logger.Log.Debug(confInfo)
+
+	a := agent.NewAgent(conf)
+
+	logger.Initialize(conf.EnvMode)
+	logger.Log.Info("Agent starting", zap.String("address", conf.Address))
 
 	// Add poll worker
 	wg.Add(1)

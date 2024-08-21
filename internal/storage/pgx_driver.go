@@ -164,13 +164,15 @@ func (d *pgxDriver) GetAll() Data {
 		case CounterType:
 			var value int64
 			if value, err = strconv.ParseInt(mvalue, 10, 64); err != nil {
-				return data
+				logger.Log.Error(err.Error())
+				continue
 			}
 			counters[mname] = value
 		case GaugeType:
 			var value float64
 			if value, err = strconv.ParseFloat(mvalue, 64); err != nil {
-				return data
+				logger.Log.Error(err.Error())
+				continue
 			}
 			gauges[mname] = value
 		}

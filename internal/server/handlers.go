@@ -118,6 +118,11 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 	// Костыли для тз
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
 	c.Response().WriteHeader(http.StatusOK)
+
+	// // add HashSHA256 to Header
+	// if s.config.HashKey != "" {
+	// 	c.Response().Header().Set(myhash.Sha256Header, myhash.ToSHA256AndHMAC([]byte{}, s.config.HashKey))
+	// }
 	return json.NewEncoder(c.Response()).Encode(metric)
 }
 

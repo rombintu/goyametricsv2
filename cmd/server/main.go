@@ -14,16 +14,22 @@ import (
 )
 
 func main() {
-	config := config.LoadServerConfig()
+	conf := config.LoadServerConfig()
 
 	// Костыли чтобы подогнать ТЗ под нормальный код
 	// Считаю что необязательно создавать новую переменную StorageURL (DATABASE_DSN) если есть StoragePath
-	if config.StoragePathAuto() || config.StorageURL != "" {
-		config.StoragePath = config.StorageURL
+	if conf.StoragePathAuto() || conf.StorageURL != "" {
+		conf.StoragePath = conf.StorageURL
 	}
 
-	storage := storage.NewStorage(config.StorageDriver, config.StoragePath)
-	server := server.NewServer(storage, config)
+	confInfo, err := config.ToYaml(conf)
+	if err != nil {
+		logger.Log.Error(err.Error())
+	}
+	logger.Log.Debug(confInfo) // Не понимаю почему не работает
+
+	storage := storage.NewStorage(conf.StorageDriver, conf.StoragePath)
+	server := server.NewServer(storage, conf)
 	server.Configure()
 	go server.Run()
 
@@ -31,9 +37,9 @@ func main() {
 	done := make(chan struct{})
 
 	// Если не включен режим синхронной записи и интервал записи больше 0, то запускаем воркер синхронизирующий storage
-	if !config.SyncMode || config.StoreInterval > 0 {
+	if !conf.SyncMode || conf.StoreInterval > 0 {
 		go func() {
-			ticker := time.NewTicker(time.Duration(config.StoreInterval) * time.Second)
+			ticker := time.NewTicker(time.Duration(conf.StoreInterval) * time.Second)
 			defer ticker.Stop()
 			for {
 				select {

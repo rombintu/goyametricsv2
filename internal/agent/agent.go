@@ -159,15 +159,14 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 			logger.Log.Debug("worker is shutdown", zap.String("name", "report"))
 			return
 		default:
-			logger.Log.Debug("message from worker", zap.String("name", "report"))
-
 			a.data.Counters = append(a.data.Counters, Counter{
 				name:  "PollCount",
 				value: int64(a.pollCount),
 			})
 
 			if err := a.sendAllDataOnServer(a.data); err != nil {
-				continue
+				logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+				time.Sleep(time.Duration(a.reportInterval) * time.Second)
 			}
 			time.Sleep(time.Duration(a.reportInterval) * time.Second)
 		}
@@ -183,8 +182,8 @@ func (a *Agent) RunPoll(ctx context.Context, wg *sync.WaitGroup) {
 			logger.Log.Debug("worker is shutdown", zap.String("name", "poll"))
 			return
 		default:
-			logger.Log.Debug("message from worker", zap.String("name", "poll"))
 			a.loadMetrics()
+			logger.Log.Debug("message from worker", zap.String("name", "poll"), zap.String("action", "load metrics"))
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
 	}

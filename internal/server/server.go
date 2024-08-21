@@ -9,6 +9,7 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
+	"github.com/rombintu/goyametricsv2/lib/myhash"
 	"go.uber.org/zap"
 )
 
@@ -85,8 +86,11 @@ func (s *Server) ConfigureMiddlewares() {
 	// 	Level: middleware.DefaultGzipConfig.Level,
 	// }))
 
+	// Оборачиваем middleware чтобы передать ключ
+	s.router.Use(myhash.HashCheckMiddleware(s.config.HashKey))
 	// Реализация gzip middleware для тз
 	s.router.Use(mygzip.GzipMiddleware)
+
 }
 
 func (s *Server) syncStorage() {
