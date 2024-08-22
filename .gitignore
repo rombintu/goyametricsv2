@@ -23,7 +23,13 @@ vendor/
 # IDEs directories
 .idea
 .vscode
+.vscode/launch.json
 
 
 metricstest
 statictest
+
+.env
+
+test.json
+store.json

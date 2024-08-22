@@ -18,10 +18,11 @@ const (
 
 func TestServer_updateMetrics(t *testing.T) {
 	e := echo.New()
-	storage := storage.NewStorage("mem")
 	conf := config.ServerConfig{
 		StorageDriver: "mem",
+		StorePath:     "test.json",
 	}
+	storage := storage.NewStorage(conf.StorageDriver, conf.StorePath)
 	s := NewServer(storage, conf)
 	s.ConfigureStorage()
 	s.ConfigureRouter()
@@ -117,14 +118,15 @@ func TestServer_updateMetrics(t *testing.T) {
 
 func TestServer_MetricGetHandler(t *testing.T) {
 	e := echo.New()
-	storage := storage.NewStorage("mem")
 	conf := config.ServerConfig{
 		StorageDriver: "mem",
+		StorePath:     "test.json",
 	}
+	storage := storage.NewStorage(conf.StorageDriver, conf.StorePath)
 	s := NewServer(storage, conf)
 	s.ConfigureStorage()
 	s.ConfigureRouter()
-	storage.Driver.Update(counterMetricType, "counter1", "1")
+	storage.Update(counterMetricType, "counter1", "1")
 	type want struct {
 		code        int
 		response    string

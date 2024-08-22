@@ -5,31 +5,37 @@ const (
 	CounterType = "counter"
 )
 
-type Driver interface {
+type Storage interface {
 	Update(mtype, mname, mval string) error
 	Get(mtype, mname string) (string, error)
-	GetAll() map[string]interface{}
+	GetAll() Data
+	Save() error
+	Restore() error
 	Open() error
 	Close() error
 }
 
-type Storage struct {
-	Driver Driver
-}
+// type Storage struct {
+// 	Driver Driver
+// }
 
-func NewStorage(storageType string) *Storage {
-	var driver Driver
+func NewStorage(storageType string, storepath string) Storage {
+	var storage Storage
 	switch storageType {
 	default:
-		driver = NewMemDriver()
+		storage = NewMemDriver(storepath)
 	}
-	return &Storage{
-		Driver: driver,
-	}
+	return storage
 }
 
-func (s *Storage) Open() {
-	if err := s.Driver.Open(); err != nil {
-		panic(err)
-	}
-}
+// func (s *Storage) Open() {
+// 	if err := s.Driver.Open(); err != nil {
+// 		logger.Log.Error("cannot open storage", zap.Error(err))
+// 	}
+// }
+
+// func (s *Storage) Close() {
+// 	if err := s.Driver.Close(); err != nil {
+// 		logger.Log.Error("cannot close storage", zap.Error(err))
+// 	}
+// }
