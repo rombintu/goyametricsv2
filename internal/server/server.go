@@ -86,11 +86,11 @@ func (s *Server) ConfigureMiddlewares() {
 	// 	Level: middleware.DefaultGzipConfig.Level,
 	// }))
 
-	// Оборачиваем middleware чтобы передать ключ
-	s.router.Use(myhash.HashCheckMiddleware(s.config.HashKey))
 	// Реализация gzip middleware для тз
 	s.router.Use(mygzip.GzipMiddleware)
 
+	// Оборачиваем middleware чтобы передать ключ
+	s.router.Use(myhash.HashCheckMiddleware(s.config.HashKey))
 }
 
 func (s *Server) syncStorage() {

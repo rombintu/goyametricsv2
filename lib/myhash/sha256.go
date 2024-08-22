@@ -17,11 +17,6 @@ func ToSHA256AndHMAC(src []byte, key string) string {
 	hash := hmac.New(sha256.New, []byte(key))
 	hash.Write(src)
 	return hex.EncodeToString(hash.Sum(nil))
-
-	// data := append(src, []byte(key)...)
-	// h := sha256.New()
-	// h.Write(data)
-	// return string(h.Sum(nil))
 }
 
 const (
@@ -57,7 +52,6 @@ func HashCheckMiddleware(key string) echo.MiddlewareFunc {
 			}
 
 			c.Request().Body = io.NopCloser(bytes.NewBuffer(body))
-
 			return next(c)
 		}
 	}
