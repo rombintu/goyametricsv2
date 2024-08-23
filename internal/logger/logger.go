@@ -71,6 +71,8 @@ func RequestLogger(next echo.HandlerFunc) echo.HandlerFunc {
 			zap.String("Content-Type", req.Header.Get("Content-Type")),
 			// add for Iter8
 			zap.String("Accept-Encoding", req.Header.Get("Accept-Encoding")),
+			// add for Iter 14
+			zap.String("Hash", req.Header.Get("HashSHA256")),
 		)
 		Log.Info("RESPONSE",
 			zap.Int("Status Code", res.Status),
@@ -79,6 +81,7 @@ func RequestLogger(next echo.HandlerFunc) echo.HandlerFunc {
 			zap.String("Content-Type", res.Header().Get("Content-Type")),
 			// add for Iter8
 			zap.String("Content-Encoding", res.Header().Get("Content-Encoding")),
+			zap.String("Hash", res.Header().Get("HashSHA256")),
 		)
 		return err
 	}

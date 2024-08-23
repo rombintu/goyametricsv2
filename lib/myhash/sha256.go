@@ -30,7 +30,7 @@ func HashCheckMiddleware(key string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Skip if KEY not set
-			if key == "" {
+			if key == "" || c.Request().Header.Get(Sha256Header) == "" {
 				return next(c)
 			}
 
@@ -39,6 +39,12 @@ func HashCheckMiddleware(key string) echo.MiddlewareFunc {
 				c.Error(err)
 			}
 			defer c.Request().Body.Close()
+
+			if c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSON ||
+				c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSONCharsetUTF8 {
+				c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
+			}
+
 			// Check hash from request
 			hashPayload := c.Request().Header.Get(Sha256Header)
 			hashOriginal := ToSHA256AndHMAC(body, key)

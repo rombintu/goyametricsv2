@@ -19,6 +19,7 @@ import (
 	models "github.com/rombintu/goyametricsv2/internal/models"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
+	"github.com/rombintu/goyametricsv2/lib/myhash"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +29,7 @@ type Agent struct {
 	reportInterval int64
 	data           Data // TODO
 	pollCount      int
+	hashKey        string
 }
 
 type Data struct {
@@ -50,6 +52,7 @@ func NewAgent(c config.AgentConfig) *Agent {
 		pollInterval:   c.PollInterval,
 		reportInterval: c.ReportInterval,
 		data:           Data{},
+		hashKey:        c.HashKey,
 	}
 }
 
@@ -92,6 +95,12 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 		return err
 	}
 
+	// If secret key is set
+	if a.hashKey != "" {
+		hashPayload := myhash.ToSHA256AndHMAC(jsonData, a.hashKey)
+		req.Header.Set(myhash.Sha256Header, hashPayload)
+	}
+
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
 	// Set header for gzip compression
 	req.Header.Set(echo.HeaderContentEncoding, mygzip.GzipHeader)
@@ -103,23 +112,6 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 	}
 
 	defer resp.Body.Close()
-	return nil
-}
-
-func (a *Agent) sendDataOnServer(metricType, metricName string, value string) error {
-	url := fmt.Sprintf("%s/update/", a.serverAddress)
-	var m models.Metrics
-	m.ID = metricName
-	m.MType = metricType
-
-	if err := m.SetValueOrDelta(value); err != nil {
-		logger.Log.Error(err.Error())
-		return err
-	}
-
-	if err := a.postRequestJSON(url, m); err != nil {
-		return err
-	}
 	return nil
 }
 

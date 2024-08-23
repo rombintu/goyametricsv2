@@ -39,3 +39,5 @@ creds
 tests.log
 
 host*
+
+*session.sql
