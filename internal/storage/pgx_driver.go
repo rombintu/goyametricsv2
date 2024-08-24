@@ -247,13 +247,16 @@ func (d *pgxDriver) updateAllAny(ctx context.Context, m AnyMetrics, mtype string
 		return errors.New("invalid metric type")
 	}
 
+	// Реализация накопления повторных ошибок
+	var errs []error
 	for mname, mvalue := range m {
 		_, err := tx.Exec(ctx, sqlScript, mtype, mname, mvalue)
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return tx.Commit(ctx)
+	errs = append(errs, tx.Commit(ctx))
+	return errors.Join(errs...)
 }
 
 func (d *pgxDriver) createTables() error {
