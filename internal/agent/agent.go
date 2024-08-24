@@ -229,22 +229,16 @@ func (a *Agent) Ping() error {
 }
 
 func (a *Agent) TryConnectToServer() error {
-	var errConn error
-	var ok = false
-	if errConn = a.Ping(); errConn != nil {
+	var err error
+	if err = a.Ping(); err != nil {
 		for i := 1; i <= 5; i += 2 {
 			// Try reconnecting after 2 seconds if connection failed
 			logger.Log.Debug("Ping failed, trying to reconnect", zap.Int("attempt", i))
 			time.Sleep(time.Duration(i) * time.Second)
-			if errConn := a.Ping(); errConn == nil {
-				ok = true
-				break
+			if err := a.Ping(); err == nil {
+				return nil
 			}
 		}
 	}
-	if !ok {
-		logger.Log.Error("Cannot connect to server", zap.String("error", errConn.Error()))
-		return errConn
-	}
-	return nil
+	return err
 }

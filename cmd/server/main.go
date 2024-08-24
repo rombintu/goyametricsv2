@@ -16,9 +16,7 @@ import (
 func main() {
 	config := config.LoadServerConfig()
 
-	// Костыли чтобы подогнать ТЗ под нормальный код
-	// Считаю что необязательно создавать новую переменную StorageURL (DATABASE_DSN) если есть StoragePath
-	if config.StoragePathAuto() || config.StorageURL != "" {
+	if config.StorageURL != "" && config.StorageDriver == storage.PgxDriver {
 		config.StoragePath = config.StorageURL
 	}
 

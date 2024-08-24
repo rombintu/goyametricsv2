@@ -167,6 +167,7 @@ func (s *Server) MetricUpdatesHandlerJSON(c echo.Context) error {
 	}
 
 	if err := s.storage.UpdateAll(data); err != nil {
+		logger.Log.Error(err.Error())
 		return err
 	}
 

@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"strconv"
 
@@ -36,21 +35,6 @@ const (
 	hintReportInterval = "Report interval"
 	hintPollInterval   = "Poll interval"
 )
-
-type DatabaseConfig struct {
-	User string `yaml:"db_user"`
-	Pass string `yaml:"db_pass"`
-	Host string `yaml:"db_host" env-default:"localhost"`
-	Port string `yaml:"db_port" env-default:"5432"`
-	Name string `yaml:"db_name" env-default:"metrics"`
-}
-
-func (db *DatabaseConfig) ToPlainText() string {
-	return fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s sslmode=disable",
-		db.Host, db.User, db.Pass, db.Name,
-	)
-}
 
 type ServerConfig struct {
 	Listen        string `yaml:"Listen" env-default:"localhost:8080"`
@@ -128,6 +112,8 @@ func LoadServerConfig() ServerConfig {
 		config.SyncMode = true
 	}
 
+	// if DATABASE_DSN is not empty, use PostgreSQL driver
+	// else if DATABASE_DSN is empty and FILE_STORAGE_PATH is not default, use File driver
 	if config.StorageURL != "" {
 		config.StorageDriver = storage.PgxDriver
 	} else if (config.StoragePath != "") && (config.StoragePath != defaultStoragePath) {
@@ -166,15 +152,6 @@ func loadServerConfigFromFlags() ServerConfig {
 	return config
 }
 
-func (c *ServerConfig) StoragePathAuto() bool {
-	if c.StorageDriver != defaultStorageDriver && c.StorageURL == "" {
-		dbConfig := loadDatabaseConfig()
-		c.StorageURL = dbConfig.ToPlainText()
-		return true
-	}
-	return false
-}
-
 // Load Agent Config from Environment, if any var empty - load from flags or set default
 func LoadAgentConfig() AgentConfig {
 	var config AgentConfig
@@ -201,14 +178,4 @@ func loadAgentConfigFromFlags() AgentConfig {
 	config.PollInterval = *p
 
 	return config
-}
-
-func loadDatabaseConfig() DatabaseConfig {
-	var dbConfig DatabaseConfig
-	dbConfig.Host = os.Getenv("DB_HOST")
-	dbConfig.Port = os.Getenv("DB_PORT")
-	dbConfig.User = os.Getenv("DB_USER")
-	dbConfig.Pass = os.Getenv("DB_PASS")
-	dbConfig.Name = os.Getenv("DB_NAME")
-	return dbConfig
 }
