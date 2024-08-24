@@ -66,6 +66,9 @@ func (a *Agent) incPollCount() {
 }
 
 func (a *Agent) postRequestJSON(url string, data any) error {
+	if err := a.TryConnectToServer(); err != nil {
+		return err
+	}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -103,23 +106,6 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 	}
 
 	defer resp.Body.Close()
-	return nil
-}
-
-func (a *Agent) sendDataOnServer(metricType, metricName string, value string) error {
-	url := fmt.Sprintf("%s/update/", a.serverAddress)
-	var m models.Metrics
-	m.ID = metricName
-	m.MType = metricType
-
-	if err := m.SetValueOrDelta(value); err != nil {
-		logger.Log.Error(err.Error())
-		return err
-	}
-
-	if err := a.postRequestJSON(url, m); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -239,5 +225,26 @@ func (a *Agent) Ping() error {
 		return err
 	}
 	defer resp.Body.Close()
+	return nil
+}
+
+func (a *Agent) TryConnectToServer() error {
+	var errConn error
+	var ok = false
+	if errConn = a.Ping(); errConn != nil {
+		for i := 1; i <= 5; i += 2 {
+			// Try reconnecting after 2 seconds if connection failed
+			logger.Log.Debug("Ping failed, trying to reconnect", zap.Int("attempt", i))
+			time.Sleep(time.Duration(i) * time.Second)
+			if errConn := a.Ping(); errConn == nil {
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
+		logger.Log.Error("Cannot connect to server", zap.String("error", errConn.Error()))
+		return errConn
+	}
 	return nil
 }

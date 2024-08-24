@@ -133,7 +133,7 @@ func (d *pgxDriver) Update(mtype, mname, mval string) error {
 		INSERT INTO metrics (mtype, mname, mvalue) 
 		VALUES ($1, $2, $3) 
 		ON CONFLICT (mname) DO 
-		UPDATE SET mvalue = EXCLUDED.mvalue::int + metrics.mvalue::int
+		UPDATE SET mvalue = (EXCLUDED.mvalue::bigint + metrics.mvalue::bigint)::text
 		`
 	case GaugeType:
 		sqlScript = `
@@ -211,16 +211,16 @@ func (d *pgxDriver) UpdateAll(data Data) error {
 	ctx := context.Background()
 	counters := counters2Any(data.Counters)
 	gauges := gauges2Any(data.Gauges)
-	if err := d.updateAny(ctx, counters, CounterType); err != nil {
+	if err := d.updateAllAny(ctx, counters, CounterType); err != nil {
 		return err
 	}
-	if err := d.updateAny(ctx, gauges, GaugeType); err != nil {
+	if err := d.updateAllAny(ctx, gauges, GaugeType); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (d *pgxDriver) updateAny(ctx context.Context, m AnyMetrics, mtype string) error {
+func (d *pgxDriver) updateAllAny(ctx context.Context, m AnyMetrics, mtype string) error {
 	tx, err := d.conn.Begin(ctx)
 	if err != nil {
 		return err
@@ -234,7 +234,7 @@ func (d *pgxDriver) updateAny(ctx context.Context, m AnyMetrics, mtype string) e
 		INSERT INTO metrics (mtype, mname, mvalue) 
 		VALUES ($1, $2, $3) 
 		ON CONFLICT (mname) DO 
-		UPDATE SET mvalue = EXCLUDED.mvalue::int + metrics.mvalue::int 
+		UPDATE SET mvalue = (EXCLUDED.mvalue::bigint + metrics.mvalue::bigint)::text
 		`
 	case GaugeType:
 		sqlScript = `

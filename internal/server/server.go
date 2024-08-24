@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/labstack/echo"
 	"github.com/rombintu/goyametricsv2/internal/config"
@@ -56,10 +55,6 @@ func (s *Server) ConfigureStorage() {
 		zap.String("driver", s.config.StorageDriver),
 		zap.String("path", s.config.StoragePath),
 	)
-}
-
-func (s *Server) RetryConfigureStorage(interval time.Duration) error {
-	return nil
 }
 
 func (s *Server) ConfigureRouter() {

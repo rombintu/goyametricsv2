@@ -39,3 +39,5 @@ creds
 tests.log
 
 host*
+
+create_table_metrics.sql
