@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"net/http"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -66,8 +65,11 @@ func (a *Agent) incPollCount() {
 	a.pollCount++
 }
 
-func (a *Agent) postRequestJSON(url string, metricData models.Metrics) error {
-	jsonData, err := json.Marshal(metricData)
+func (a *Agent) postRequestJSON(url string, data any) error {
+	if err := a.TryConnectToServer(); err != nil {
+		return err
+	}
+	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
@@ -107,18 +109,29 @@ func (a *Agent) postRequestJSON(url string, metricData models.Metrics) error {
 	return nil
 }
 
-func (a *Agent) sendDataOnServer(metricType, metricName string, value string) error {
-	url := fmt.Sprintf("%s/update/", a.serverAddress)
-	var m models.Metrics
-	m.ID = metricName
-	m.MType = metricType
+func (a *Agent) sendAllDataOnServer(data Data) error {
+	url := fmt.Sprintf("%s/updates/", a.serverAddress)
+	var metrics []models.Metrics
 
-	if err := m.SetValueOrDelta(value); err != nil {
-		logger.Log.Error(err.Error())
-		return err
+	for _, c := range data.Counters {
+		m := models.Metrics{
+			ID:    c.name,
+			MType: storage.CounterType,
+			Delta: &c.value,
+		}
+		metrics = append(metrics, m)
 	}
 
-	if err := a.postRequestJSON(url, m); err != nil {
+	for _, g := range data.Gauges {
+		m := models.Metrics{
+			ID:    g.name,
+			MType: storage.GaugeType,
+			Value: &g.value,
+		}
+		metrics = append(metrics, m)
+	}
+
+	if err := a.postRequestJSON(url, metrics); err != nil {
 		return err
 	}
 	return nil
@@ -134,26 +147,12 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 		default:
 			logger.Log.Debug("message from worker", zap.String("name", "report"))
 
-			for _, cm := range a.data.Counters {
-				if err := a.sendDataOnServer(storage.CounterType, cm.name, strconv.FormatInt(cm.value, 10)); err != nil {
-					logger.Log.Warn("Error sending metrics",
-						zap.String("server", "off"),
-						zap.String("metric", cm.name),
-					)
-					continue
-				}
-			}
-			for _, gm := range a.data.Gauges {
-				if err := a.sendDataOnServer(storage.GaugeType, gm.name, strconv.FormatFloat(gm.value, 'g', -1, 64)); err != nil {
-					logger.Log.Warn("Error sending metrics",
-						zap.String("server", "off"),
-						zap.String("metric", gm.name),
-					)
-					continue
-				}
-			}
-			if err := a.sendDataOnServer(storage.CounterType, "PollCount", strconv.Itoa(a.pollCount)); err != nil {
-				logger.Log.Warn("Error sending metrics", zap.String("server", "off"), zap.String("metric", "PollCounts"))
+			a.data.Counters = append(a.data.Counters, Counter{
+				name:  "PollCount",
+				value: int64(a.pollCount),
+			})
+
+			if err := a.sendAllDataOnServer(a.data); err != nil {
 				continue
 			}
 			time.Sleep(time.Duration(a.reportInterval) * time.Second)
@@ -218,4 +217,28 @@ func (a *Agent) loadMetrics() {
 	a.data.Counters = counters
 	a.data.Gauges = gauges
 
+}
+
+func (a *Agent) Ping() error {
+	resp, err := http.Get(a.serverAddress + "/ping")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (a *Agent) TryConnectToServer() error {
+	var err error
+	if err = a.Ping(); err != nil {
+		for i := 1; i <= 5; i += 2 {
+			// Try reconnecting after 2 seconds if connection failed
+			logger.Log.Debug("Ping failed, trying to reconnect", zap.Int("attempt", i))
+			time.Sleep(time.Duration(i) * time.Second)
+			if err := a.Ping(); err == nil {
+				return nil
+			}
+		}
+	}
+	return err
 }

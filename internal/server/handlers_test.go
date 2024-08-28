@@ -1,13 +1,15 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/labstack/echo"
 	"github.com/rombintu/goyametricsv2/internal/config"
-	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/internal/mocks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,14 +20,18 @@ const (
 
 func TestServer_updateMetrics(t *testing.T) {
 	e := echo.New()
-	conf := config.ServerConfig{
-		StorageDriver: "mem",
-		StorePath:     "test.json",
-	}
-	storage := storage.NewStorage(conf.StorageDriver, conf.StorePath)
-	s := NewServer(storage, conf)
-	s.ConfigureStorage()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	s := NewServer(m, config.ServerConfig{})
 	s.ConfigureRouter()
+
+	m.EXPECT().Update(counterMetricType, "counter1", "1").Return(nil)
+	m.EXPECT().Update(counterMetricType, "counter1", "5").Return(nil)
+	m.EXPECT().Update(gaugeMetricType, "gauge1", "1.5").Return(nil)
+	m.EXPECT().Update(gaugeMetricType, "gauge1", "2").Return(nil)
+
 	type want struct {
 		code        int
 		response    string
@@ -42,7 +48,7 @@ func TestServer_updateMetrics(t *testing.T) {
 		target params
 	}{
 		{
-			name: "add new counter",
+			name: "addNewCounter",
 			want: want{
 				code:        http.StatusOK,
 				response:    "updated",
@@ -55,7 +61,7 @@ func TestServer_updateMetrics(t *testing.T) {
 			},
 		},
 		{
-			name: "add old counter",
+			name: "addOldCounter",
 			want: want{
 				code:        http.StatusOK,
 				response:    "updated",
@@ -68,7 +74,7 @@ func TestServer_updateMetrics(t *testing.T) {
 			},
 		},
 		{
-			name: "add new gauge",
+			name: "addNewGauge",
 			want: want{
 				code:        http.StatusOK,
 				response:    "updated",
@@ -82,7 +88,7 @@ func TestServer_updateMetrics(t *testing.T) {
 			},
 		},
 		{
-			name: "add old gauge",
+			name: "addOldGauge",
 			want: want{
 				code:        http.StatusOK,
 				response:    "updated",
@@ -118,15 +124,17 @@ func TestServer_updateMetrics(t *testing.T) {
 
 func TestServer_MetricGetHandler(t *testing.T) {
 	e := echo.New()
-	conf := config.ServerConfig{
-		StorageDriver: "mem",
-		StorePath:     "test.json",
-	}
-	storage := storage.NewStorage(conf.StorageDriver, conf.StorePath)
-	s := NewServer(storage, conf)
-	s.ConfigureStorage()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	s := NewServer(m, config.ServerConfig{})
 	s.ConfigureRouter()
-	storage.Update(counterMetricType, "counter1", "1")
+
+	m.EXPECT().Get(counterMetricType, "counter1").Return("1", nil)
+	m.EXPECT().Get(counterMetricType, "unknown").Return("", errors.New("not found"))
+
 	type want struct {
 		code        int
 		response    string
@@ -142,7 +150,7 @@ func TestServer_MetricGetHandler(t *testing.T) {
 		target params
 	}{
 		{
-			name: "get known metric",
+			name: "getKnownMetric",
 			want: want{
 				code:        http.StatusOK,
 				response:    "1",
@@ -154,7 +162,7 @@ func TestServer_MetricGetHandler(t *testing.T) {
 			},
 		},
 		{
-			name: "get unknown metric",
+			name: "getUnknownMetric",
 			want: want{
 				code:        http.StatusNotFound,
 				response:    "not found",

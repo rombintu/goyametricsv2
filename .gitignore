@@ -33,3 +33,11 @@ statictest
 
 test.json
 store.json
+creds
+
+*test.json
+tests.log
+
+host*
+
+create_table_metrics.sql

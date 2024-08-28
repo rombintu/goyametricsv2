@@ -1,11 +1,11 @@
 version: '3'
 tasks:
-  mtest-agent:
+  test:
     cmds:
-      - metricstest -test.v -test.run=^TestIteration1$ -agent-binary-path=cmd/agent/app
-  mtest-server:
-    cmds:
-      - metricstest -test.v -test.run=^TestIteration1$ -agent-binary-path=cmd/server/app
+      - go vet -vettool=./statictest ./... > tests.log
+      - go build -o cmd/server/server cmd/server/main.go >> tests.log
+      - go build -o cmd/agent/agent cmd/agent/main.go >> tests.log
+      - ./metricstest -test.v -agent-binary-path=./cmd/agent/agent -binary-path=./cmd/server/server -server-port=8080 -source-path=./ -file-storage-path=./store-test.json -database-dsn="host=localhost user=admin password=admin dbname=metrics sslmode=disable" >> tests.log
   build-server:
     cmds:
       - go build -o cmd/server/server cmd/server/main.go
@@ -15,3 +15,6 @@ tasks:
   statictest:
     cmds:
       - go vet -vettool=./statictest ./...
+  gomock:
+    cmds:
+      - mockgen -destination=./internal/mocks/mock_storage.go -package=mocks github.com/rombintu/goyametricsv2/internal/storage Storage

@@ -4,6 +4,8 @@ import (
 	"flag"
 	"os"
 	"strconv"
+
+	"github.com/rombintu/goyametricsv2/internal/storage"
 )
 
 const (
@@ -12,7 +14,7 @@ const (
 	defaultStorageDriver = "mem"
 	defaultEnvMode       = "dev"
 	defaultStoreInterval = 300
-	defaultStorePath     = "store.json"
+	defaultStoragePath   = "store.json"
 	defaultRestoreFlag   = true
 	// Agent
 	defaultServerURL      = defaultListen
@@ -24,7 +26,8 @@ const (
 	hintStorageDriver = "Storage driver"
 	hintEnvMode       = "Enviriment server mode"
 	hintStoreInterval = "Interval between saves"
-	hintStorePath     = "Path to store data"
+	hintStoragePath   = "Path to store data"
+	hintStorageURL    = "URL or Plain creds to database"
 	hintRestoreFlag   = "Restore data from store?"
 
 	// Agent
@@ -40,9 +43,12 @@ type ServerConfig struct {
 
 	// New
 	StoreInterval int64  `yaml:"StoreInterval" env-default:"300"`
-	StorePath     string `yaml:"StorePath" env-default:"store.json"`
-	RestoreFlag   bool   `yaml:"RestoreFlag" env-default:"true"`
-	SyncMode      bool   `yaml:"SyncMode" env-default:"false"`
+	StoragePath   string `yaml:"StoragePath" env-default:"store.json"`
+
+	StorageURL string `yaml:"StorageURL"`
+
+	RestoreFlag bool `yaml:"RestoreFlag" env-default:"true"`
+	SyncMode    bool `yaml:"SyncMode" env-default:"false"`
 }
 
 type AgentConfig struct {
@@ -95,12 +101,23 @@ func LoadServerConfig() ServerConfig {
 	config.Listen = tryLoadFromEnv("ADDRESS", fromFlags.Listen)
 	// New args
 	config.StoreInterval = tryLoadFromEnvInt64("STORE_INTERVAL", fromFlags.StoreInterval)
-	config.StorePath = tryLoadFromEnv("STORE_PATH", fromFlags.StorePath)
+	config.StoragePath = tryLoadFromEnv("FILE_STORAGE_PATH", fromFlags.StoragePath)
 	config.RestoreFlag = tryLoadFromEnvBool("RESTORE_FLAG", fromFlags.RestoreFlag)
 
+	// increment 10
+	config.StorageDriver = tryLoadFromEnv("STORAGE_DRIVER", fromFlags.StorageDriver)
+	config.StorageURL = tryLoadFromEnv("DATABASE_DSN", fromFlags.StorageURL)
 	// Change to sync mode
 	if config.StoreInterval == 0 {
 		config.SyncMode = true
+	}
+
+	// if DATABASE_DSN is not empty, use PostgreSQL driver
+	// else if DATABASE_DSN is empty and FILE_STORAGE_PATH is not default, use File driver
+	if config.StorageURL != "" {
+		config.StorageDriver = storage.PgxDriver
+	} else if (config.StoragePath != "") && (config.StoragePath != defaultStoragePath) {
+		config.StorageDriver = storage.FileDriver
 	}
 
 	return config
@@ -110,13 +127,14 @@ func LoadServerConfig() ServerConfig {
 func loadServerConfigFromFlags() ServerConfig {
 	var config ServerConfig
 	a := flag.String("a", defaultListen, hintListen)
-	s := flag.String("storageDriver", defaultStorageDriver, hintStorageDriver)
+	s := flag.String("driver", defaultStorageDriver, hintStorageDriver)
 	e := flag.String("env", defaultEnvMode, hintEnvMode)
 
 	// New flags
 	i := flag.Int64("i", defaultStoreInterval, hintStoreInterval)
-	f := flag.String("f", defaultStorePath, hintStorePath)
+	f := flag.String("f", defaultStoragePath, hintStoragePath)
 	r := flag.Bool("r", defaultRestoreFlag, hintRestoreFlag)
+	d := flag.String("d", "", hintStorageURL)
 	flag.Parse()
 
 	config.Listen = *a
@@ -125,8 +143,12 @@ func loadServerConfigFromFlags() ServerConfig {
 
 	// Parse new flags
 	config.StoreInterval = *i
-	config.StorePath = *f
+	config.StoragePath = *f
 	config.RestoreFlag = *r
+
+	// increment 10
+	config.StorageURL = *d
+
 	return config
 }
 

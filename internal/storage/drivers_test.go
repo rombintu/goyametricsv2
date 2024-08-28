@@ -4,22 +4,20 @@ import (
 	"testing"
 )
 
-func Test_memDriver_Save(t *testing.T) {
+func Test_tmpDriver_Save(t *testing.T) {
 	type fields struct {
 		data      Data
 		storepath string
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
+		name   string
+		fields fields
 	}{
 		{
-			name: "save empty",
+			name: "saveEmpty",
 			fields: fields{
 				storepath: "test.json",
 			},
-			wantErr: false,
 		},
 		{
 			name: "save",
@@ -36,55 +34,52 @@ func Test_memDriver_Save(t *testing.T) {
 				},
 				storepath: "test.json",
 			},
-			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &memDriver{
+			m := &tmpDriver{
 				data:      &tt.fields.data,
 				storepath: tt.fields.storepath,
 			}
-			if err := m.Save(); (err != nil) != tt.wantErr {
-				t.Errorf("memDriver.Save() error = %v, wantErr %v", err, tt.wantErr)
+			if err := m.Save(); err != nil {
+				t.Errorf("tmpDriver.Save() error = %v", err)
 			}
 		})
 	}
 }
 
-// func Test_memDriver_Restore(t *testing.T) {
-// 	type fields struct {
-// 		data      map[string]interface{}
-// 		storepath string
-// 	}
-// 	tests := []struct {
-// 		name    string
-// 		fields  fields
-// 		wantErr bool
-// 	}{
-// 		{
-// 			name: "restore",
-// 			fields: fields{
-// 				storepath: "test.json",
-// 			},
-// 			wantErr: false,
-// 		},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			m := &memDriver{
-// 				data:      tt.fields.data,
-// 				storepath: tt.fields.storepath,
-// 			}
-// 			if err := m.Restore(); (err != nil) != tt.wantErr {
-// 				t.Errorf("memDriver.Restore() error = %v, wantErr %v", err, tt.wantErr)
-// 			}
-// 			if len(m.data) != 1 {
-// 				t.Error("memDriver.Restore() data not restored")
-// 			}
-// 			if _, ok := m.data["foo"]; !ok {
-// 				t.Error("memDriver.Restore() 'foo' data not restored")
-// 			}
-// 		})
-// 	}
-// }
+func Test_tmpDriver_Restore(t *testing.T) {
+	type fields struct {
+		data      Data
+		storepath string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+	}{
+		{
+			name: "restore",
+			fields: fields{
+				storepath: "test.json",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &tmpDriver{
+				data:      &tt.fields.data,
+				storepath: tt.fields.storepath,
+			}
+			if err := m.Restore(); err != nil {
+				t.Errorf("tmpDriver.Restore() error = %v", err)
+			}
+			if len(m.data.Counters) != 2 {
+				t.Error("tmpDriver.Restore() len Counters not 2")
+			}
+			if _, ok := m.getCounter("counter2"); !ok {
+				t.Error("tmpDriver.Restore() 'counter2' data not restored")
+			}
+		})
+	}
+}

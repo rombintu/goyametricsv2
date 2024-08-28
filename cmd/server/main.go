@@ -15,12 +15,15 @@ import (
 
 func main() {
 	config := config.LoadServerConfig()
-	storage := storage.NewStorage(config.StorageDriver, config.StorePath)
+
+	if config.StorageURL != "" && config.StorageDriver == storage.PgxDriver {
+		config.StoragePath = config.StorageURL
+	}
+
+	storage := storage.NewStorage(config.StorageDriver, config.StoragePath)
 	server := server.NewServer(storage, config)
 	server.Configure()
 	go server.Run()
-
-	// Не очень разбираюсь в каналах, беру примеры из инета и подгоняю
 
 	// Канал для сигнала завершения
 	done := make(chan struct{})
