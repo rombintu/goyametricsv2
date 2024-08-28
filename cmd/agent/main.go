@@ -20,12 +20,6 @@ func main() {
 
 	conf := config.LoadAgentConfig()
 
-	confInfo, err := config.ToYaml(conf)
-	if err != nil {
-		logger.Log.Error(err.Error())
-	}
-	logger.Log.Debug(confInfo)
-
 	a := agent.NewAgent(conf)
 
 	logger.Initialize(conf.EnvMode)

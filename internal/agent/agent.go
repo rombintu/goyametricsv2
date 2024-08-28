@@ -69,6 +69,9 @@ func (a *Agent) incPollCount() {
 }
 
 func (a *Agent) postRequestJSON(url string, data any) error {
+	if err := a.TryConnectToServer(); err != nil {
+		return err
+	}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -222,4 +225,28 @@ func (a *Agent) loadMetrics() {
 	a.data.Counters = counters
 	a.data.Gauges = gauges
 
+}
+
+func (a *Agent) Ping() error {
+	resp, err := http.Get(a.serverAddress + "/ping")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (a *Agent) TryConnectToServer() error {
+	var err error
+	if err = a.Ping(); err != nil {
+		for i := 1; i <= 5; i += 2 {
+			// Try reconnecting after 2 seconds if connection failed
+			logger.Log.Debug("Ping failed, trying to reconnect", zap.Int("attempt", i))
+			time.Sleep(time.Duration(i) * time.Second)
+			if err := a.Ping(); err == nil {
+				return nil
+			}
+		}
+	}
+	return err
 }

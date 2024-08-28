@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -90,31 +88,4 @@ func tryLoadFromEnvBool(key string, fromFlags bool) bool {
 			return parseBool
 		}
 	}
-}
-
-func (c *ServerConfig) StoragePathAuto() bool {
-	if c.StorageDriver != defaultStorageDriver && c.StorageURL == "" {
-		dbConfig := loadDatabaseConfig()
-		c.StorageURL = dbConfig.ToPlainText()
-		return true
-	}
-	return false
-}
-
-func loadDatabaseConfig() DatabaseConfig {
-	var dbConfig DatabaseConfig
-	dbConfig.Host = os.Getenv("DB_HOST")
-	dbConfig.Port = os.Getenv("DB_PORT")
-	dbConfig.User = os.Getenv("DB_USER")
-	dbConfig.Pass = os.Getenv("DB_PASS")
-	dbConfig.Name = os.Getenv("DB_NAME")
-	return dbConfig
-}
-
-func ToYaml(config interface{}) (string, error) {
-	ydata, err := yaml.Marshal(&config)
-	if err != nil {
-		return "", err
-	}
-	return string(ydata), nil
 }

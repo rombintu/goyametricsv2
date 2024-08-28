@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"time"
 
-	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -66,20 +66,28 @@ func NewPgxDriver(dbURL string) *pgxDriver {
 // }
 
 func (d *pgxDriver) Open() error {
-	var err error
-	var pool *pgxpool.Pool
-	pool, err = pgxpool.New(context.Background(), d.dbURL)
+	pool, err := pgxpool.New(context.Background(), d.dbURL)
 	if err != nil {
 		return err
 	}
 	d.conn = pool
 
-	var pgErr *pgconn.PgError
+	var errConn error
+	var ok bool
+	for i := 1; i <= 5; i += 2 {
+		if errConn = d.Ping(); errConn == nil {
+			ok = true
+			break
+		}
+		logger.Log.Debug("Try reconnect to database", zap.Int("sleep seconds", i))
+		time.Sleep(time.Duration(i) * time.Second)
+	}
+	if !ok {
+		return errConn
+	}
+
 	err = d.createTables()
-	if errors.As(err, &pgErr) && pgerrcode.IsConnectionException(pgErr.Code) {
-		logger.Log.Warn(pgerrcode.ConnectionFailure, zap.Int("attemp", 1))
-		return err
-	} else if err != nil {
+	if err != nil {
 		return err
 	}
 	return nil
@@ -190,16 +198,16 @@ func (d *pgxDriver) UpdateAll(data Data) error {
 	ctx := context.Background()
 	counters := counters2Any(data.Counters)
 	gauges := gauges2Any(data.Gauges)
-	if err := d.updateAny(ctx, counters, CounterType); err != nil {
+	if err := d.updateAllAny(ctx, counters, CounterType); err != nil {
 		return err
 	}
-	if err := d.updateAny(ctx, gauges, GaugeType); err != nil {
+	if err := d.updateAllAny(ctx, gauges, GaugeType); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (d *pgxDriver) updateAny(ctx context.Context, m AnyMetrics, mtype string) error {
+func (d *pgxDriver) updateAllAny(ctx context.Context, m AnyMetrics, mtype string) error {
 	tx, err := d.conn.Begin(ctx)
 	if err != nil {
 		return err
@@ -226,13 +234,16 @@ func (d *pgxDriver) updateAny(ctx context.Context, m AnyMetrics, mtype string) e
 		return errors.New("invalid metric type")
 	}
 
+	// Реализация накопления повторных ошибок
+	var errs []error
 	for mname, mvalue := range m {
 		_, err := tx.Exec(ctx, sqlScript, mtype, mname, mvalue)
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return tx.Commit(ctx)
+	errs = append(errs, tx.Commit(ctx))
+	return errors.Join(errs...)
 }
 
 func (d *pgxDriver) createTables() error {

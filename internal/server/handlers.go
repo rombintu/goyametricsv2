@@ -79,14 +79,12 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 		zap.Any("value", metric.Value),
 	)
 
-	// Создаем ошибку для обработки пустых значения
-	err := errors.New("delta or value must be not null")
-
 	var mvalue string
 	// Парсим то что нужно, взависимости от типа, делаем строку чтобы не менять логику
 	switch metric.MType {
 	case storage.GaugeType:
 		if metric.Value == nil {
+			err := errors.New("delta must be not null")
 			logger.Log.Error(err.Error())
 			return c.String(http.StatusBadRequest, err.Error())
 		}
@@ -94,6 +92,7 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 		mvalue = strconv.FormatFloat(*metric.Value, 'g', -1, 64)
 	case storage.CounterType:
 		if metric.Delta == nil {
+			err := errors.New("delta must be not null")
 			logger.Log.Error(err.Error())
 			return c.String(http.StatusBadRequest, err.Error())
 		}

@@ -16,17 +16,9 @@ import (
 func main() {
 	conf := config.LoadServerConfig()
 
-	// Костыли чтобы подогнать ТЗ под нормальный код
-	// Считаю что необязательно создавать новую переменную StorageURL (DATABASE_DSN) если есть StoragePath
-	if conf.StoragePathAuto() || conf.StorageURL != "" {
+	if conf.StorageURL != "" && conf.StorageDriver == storage.PgxDriver {
 		conf.StoragePath = conf.StorageURL
 	}
-
-	confInfo, err := config.ToYaml(conf)
-	if err != nil {
-		logger.Log.Error(err.Error())
-	}
-	logger.Log.Debug(confInfo) // Не понимаю почему не работает
 
 	storage := storage.NewStorage(conf.StorageDriver, conf.StoragePath)
 	server := server.NewServer(storage, conf)
