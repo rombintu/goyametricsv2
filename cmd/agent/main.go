@@ -21,6 +21,7 @@ func main() {
 	conf := config.LoadAgentConfig()
 
 	a := agent.NewAgent(conf)
+	a.Configure()
 
 	logger.Initialize(conf.EnvMode)
 	logger.Log.Info("Agent starting", zap.String("address", conf.Address))
@@ -32,6 +33,10 @@ func main() {
 	// Add report worker
 	wg.Add(1)
 	go a.RunReport(ctx, wg)
+
+	// Add one more worker
+	wg.Add(1)
+	go a.RunPollv2(ctx, wg)
 
 	// Канал для перехвата сигналов
 	sigChan := make(chan os.Signal, 1)

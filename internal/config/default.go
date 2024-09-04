@@ -18,6 +18,7 @@ const (
 	defaultServerURL      = defaultListen
 	defaultReportInterval = 2
 	defaultPollInterval   = 10
+	defaultRateLimit      = 0
 
 	// Server
 	hintListen        = "Server address"
@@ -36,6 +37,7 @@ const (
 	hintServerURL      = hintListen
 	hintReportInterval = "Report interval"
 	hintPollInterval   = "Poll interval"
+	hintRateLimit      = "Rate limit. 0 - unlimited"
 )
 
 type DatabaseConfig struct {

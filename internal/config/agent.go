@@ -10,6 +10,7 @@ type AgentConfig struct {
 	ReportInterval int64  `yaml:"reportInterval" env-default:"10"`
 	EnvMode        string `yaml:"EnvMode" env-default:"dev"`
 	HashKey        string
+	RateLimit      int64
 }
 
 // Try load Server Config from flags
@@ -19,12 +20,14 @@ func loadAgentConfigFromFlags() AgentConfig {
 	r := flag.Int64("r", defaultReportInterval, hintReportInterval)
 	p := flag.Int64("p", defaultPollInterval, hintPollInterval)
 	k := flag.String("k", defaultHashKey, hintHashKey)
+	l := flag.Int64("l", defaultRateLimit, hintRateLimit)
 	flag.Parse()
 
 	config.Address = *a
 	config.ReportInterval = *r
 	config.PollInterval = *p
 	config.HashKey = *k
+	config.RateLimit = *l
 
 	return config
 }
@@ -40,5 +43,6 @@ func LoadAgentConfig() AgentConfig {
 	config.PollInterval = tryLoadFromEnvInt64("POLL_INTERVAL", fromFlags.PollInterval)
 
 	config.HashKey = tryLoadFromEnv("KEY", fromFlags.HashKey)
+	config.RateLimit = tryLoadFromEnvInt64("RATE_LIMIT", fromFlags.RateLimit)
 	return config
 }
