@@ -72,21 +72,6 @@ func (d *pgxDriver) Open() error {
 	}
 	d.conn = pool
 
-	// Почему то такая схема не работает. TODO
-	// var pgErr *pgconn.PgError
-	// Try connect to database
-	// if _, errConn = d.conn.Acquire(context.Background()); errConn != nil {
-	// if errors.As(err, &pgErr) {
-	// 	logger.Log.Debug("Error is a pgconn.PgError", zap.String("code", pgErr.Code))
-	// 	if pgerrcode.IsConnectionException(pgErr.Code) {
-	// 		logger.Log.Debug(pgerrcode.ConnectionFailure, zap.Int("attemp", 1))
-	// 		return err
-	// 	}
-	// } else {
-	// 	return err
-	// }
-
-	// }
 	var errConn error
 	var ok bool
 	for i := 1; i <= 5; i += 2 {
@@ -187,13 +172,15 @@ func (d *pgxDriver) GetAll() Data {
 		case CounterType:
 			var value int64
 			if value, err = strconv.ParseInt(mvalue, 10, 64); err != nil {
-				return data
+				logger.Log.Error(err.Error())
+				continue
 			}
 			counters[mname] = value
 		case GaugeType:
 			var value float64
 			if value, err = strconv.ParseFloat(mvalue, 64); err != nil {
-				return data
+				logger.Log.Error(err.Error())
+				continue
 			}
 			gauges[mname] = value
 		}

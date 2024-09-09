@@ -19,6 +19,10 @@ import (
 	models "github.com/rombintu/goyametricsv2/internal/models"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
+	"github.com/rombintu/goyametricsv2/lib/myhash"
+	"github.com/rombintu/goyametricsv2/lib/patterns"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +32,9 @@ type Agent struct {
 	reportInterval int64
 	data           Data // TODO
 	pollCount      int
+	hashKey        string
+	rateLimit      int64
+	semaphore      *patterns.Semaphore
 }
 
 type Data struct {
@@ -50,6 +57,15 @@ func NewAgent(c config.AgentConfig) *Agent {
 		pollInterval:   c.PollInterval,
 		reportInterval: c.ReportInterval,
 		data:           Data{},
+		hashKey:        c.HashKey,
+		rateLimit:      c.RateLimit,
+	}
+}
+
+func (a *Agent) Configure() {
+	// Configure semaphore
+	if a.rateLimit > 0 {
+		a.semaphore = patterns.NewSemaphore(a.rateLimit)
 	}
 }
 
@@ -93,6 +109,12 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 	req, err := http.NewRequest(http.MethodPost, url, &buff)
 	if err != nil {
 		return err
+	}
+
+	// If secret key is set
+	if a.hashKey != "" {
+		hashPayload := myhash.ToSHA256AndHMAC(jsonData, a.hashKey)
+		req.Header.Set(myhash.Sha256Header, hashPayload)
 	}
 
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
@@ -145,15 +167,21 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 			logger.Log.Debug("worker is shutdown", zap.String("name", "report"))
 			return
 		default:
-			logger.Log.Debug("message from worker", zap.String("name", "report"))
-
 			a.data.Counters = append(a.data.Counters, Counter{
 				name:  "PollCount",
 				value: int64(a.pollCount),
 			})
-
+			if a.rateLimit > 0 {
+				logger.Log.Debug("Acquire", zap.String("worker", "pollv1"))
+				a.semaphore.Acquire()
+			}
 			if err := a.sendAllDataOnServer(a.data); err != nil {
-				continue
+				logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+				time.Sleep(time.Duration(a.reportInterval) * time.Second)
+			}
+			if a.rateLimit > 0 {
+				logger.Log.Debug("Release", zap.String("worker", "pollv1"))
+				a.semaphore.Release()
 			}
 			time.Sleep(time.Duration(a.reportInterval) * time.Second)
 		}
@@ -169,12 +197,63 @@ func (a *Agent) RunPoll(ctx context.Context, wg *sync.WaitGroup) {
 			logger.Log.Debug("worker is shutdown", zap.String("name", "poll"))
 			return
 		default:
-			logger.Log.Debug("message from worker", zap.String("name", "poll"))
 			a.loadMetrics()
+			logger.Log.Debug("message from worker", zap.String("name", "poll"), zap.String("action", "load metrics common"))
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
 	}
 
+}
+
+// Add one more gorutine
+func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Debug("worker is shutdown", zap.String("name", "pollv2"))
+			return
+		default:
+			optData := a.loadPSUtilsMetrics()
+			if a.rateLimit > 0 {
+				logger.Log.Debug("Acquire", zap.String("worker", "pollv2"))
+				a.semaphore.Acquire()
+			}
+			if err := a.sendAllDataOnServer(optData); err != nil {
+				logger.Log.Warn(err.Error())
+			}
+			if a.rateLimit > 0 {
+				logger.Log.Debug("Release", zap.String("worker", "pollv2"))
+				a.semaphore.Release()
+			}
+			logger.Log.Debug("message from worker", zap.String("name", "poll"), zap.String("action", "load metrics optionally"))
+			time.Sleep(time.Duration(a.pollInterval) * time.Second)
+		}
+	}
+
+}
+
+func (a *Agent) loadPSUtilsMetrics() Data {
+	v, err := mem.VirtualMemory()
+	if err != nil {
+		logger.Log.Warn(err.Error())
+		return Data{}
+	}
+
+	u, err := cpu.Percent(0, false)
+	if err != nil {
+		logger.Log.Warn(err.Error())
+		return Data{}
+	}
+
+	var newGauges []Gauge
+	newGauges = append(newGauges, Gauge{name: "TotalMemory", value: float64(v.Total)})
+	newGauges = append(newGauges, Gauge{name: "FreeMemory", value: float64(v.Free)})
+	newGauges = append(newGauges, Gauge{name: "CPUutilization1", value: u[0]})
+
+	return Data{
+		Gauges: newGauges,
+	}
 }
 
 func (a *Agent) loadMetrics() {

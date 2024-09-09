@@ -14,14 +14,14 @@ import (
 )
 
 func main() {
-	config := config.LoadServerConfig()
+	conf := config.LoadServerConfig()
 
-	if config.StorageURL != "" && config.StorageDriver == storage.PgxDriver {
-		config.StoragePath = config.StorageURL
+	if conf.StorageURL != "" && conf.StorageDriver == storage.PgxDriver {
+		conf.StoragePath = conf.StorageURL
 	}
 
-	storage := storage.NewStorage(config.StorageDriver, config.StoragePath)
-	server := server.NewServer(storage, config)
+	storage := storage.NewStorage(conf.StorageDriver, conf.StoragePath)
+	server := server.NewServer(storage, conf)
 	server.Configure()
 	go server.Run()
 
@@ -29,9 +29,9 @@ func main() {
 	done := make(chan struct{})
 
 	// Если не включен режим синхронной записи и интервал записи больше 0, то запускаем воркер синхронизирующий storage
-	if !config.SyncMode || config.StoreInterval > 0 {
+	if !conf.SyncMode || conf.StoreInterval > 0 {
 		go func() {
-			ticker := time.NewTicker(time.Duration(config.StoreInterval) * time.Second)
+			ticker := time.NewTicker(time.Duration(conf.StoreInterval) * time.Second)
 			defer ticker.Stop()
 			for {
 				select {

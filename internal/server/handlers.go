@@ -10,6 +10,7 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	models "github.com/rombintu/goyametricsv2/internal/models"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/myhash"
 	"go.uber.org/zap"
 )
 
@@ -114,9 +115,17 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 		s.syncStorage()
 	}
 
-	// Костыли для тз
+	// add HashSHA256 to Header
+	if s.config.HashKey != "" {
+		bytesData, err := json.Marshal(metric)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to encode JSON")
+		}
+		c.Response().Header().Set(myhash.Sha256Header, myhash.ToSHA256AndHMAC(bytesData, s.config.HashKey))
+	}
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
 	c.Response().WriteHeader(http.StatusOK)
+
 	return json.NewEncoder(c.Response()).Encode(metric)
 }
 
@@ -176,9 +185,17 @@ func (s *Server) MetricUpdatesHandlerJSON(c echo.Context) error {
 		s.syncStorage()
 	}
 
-	// Костыли для тз
+	// add HashSHA256 to Header
+	if s.config.HashKey != "" {
+		bytesData, err := json.Marshal(metrics)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to encode JSON")
+		}
+		c.Response().Header().Set(myhash.Sha256Header, myhash.ToSHA256AndHMAC(bytesData, s.config.HashKey))
+	}
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
 	c.Response().WriteHeader(http.StatusOK)
+
 	return json.NewEncoder(c.Response()).Encode(metrics)
 }
 
@@ -202,8 +219,17 @@ func (s *Server) MetricValueHandlerJSON(c echo.Context) error {
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
+	// add HashSHA256 to Header
+	if s.config.HashKey != "" {
+		bytesData, err := json.Marshal(metric)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to encode JSON")
+		}
+		c.Response().Header().Set(myhash.Sha256Header, myhash.ToSHA256AndHMAC(bytesData, s.config.HashKey))
+	}
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
 	c.Response().WriteHeader(http.StatusOK)
+
 	return json.NewEncoder(c.Response()).Encode(metric)
 }
 
