@@ -123,7 +123,7 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 		}
 		c.Response().Header().Set(myhash.Sha256Header, myhash.ToSHA256AndHMAC(bytesData, s.config.HashKey))
 	}
-	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
+	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	c.Response().WriteHeader(http.StatusOK)
 
 	return json.NewEncoder(c.Response()).Encode(metric)
@@ -193,7 +193,7 @@ func (s *Server) MetricUpdatesHandlerJSON(c echo.Context) error {
 		}
 		c.Response().Header().Set(myhash.Sha256Header, myhash.ToSHA256AndHMAC(bytesData, s.config.HashKey))
 	}
-	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
+	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	c.Response().WriteHeader(http.StatusOK)
 
 	return json.NewEncoder(c.Response()).Encode(metrics)
@@ -227,7 +227,7 @@ func (s *Server) MetricValueHandlerJSON(c echo.Context) error {
 		}
 		c.Response().Header().Set(myhash.Sha256Header, myhash.ToSHA256AndHMAC(bytesData, s.config.HashKey))
 	}
-	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
+	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	c.Response().WriteHeader(http.StatusOK)
 
 	return json.NewEncoder(c.Response()).Encode(metric)

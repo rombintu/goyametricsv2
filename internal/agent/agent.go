@@ -117,7 +117,7 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 		req.Header.Set(myhash.Sha256Header, hashPayload)
 	}
 
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	// Set header for gzip compression
 	req.Header.Set(echo.HeaderContentEncoding, mygzip.GzipHeader)
 

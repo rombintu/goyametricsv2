@@ -40,9 +40,8 @@ func HashCheckMiddleware(key string) echo.MiddlewareFunc {
 			}
 			defer c.Request().Body.Close()
 
-			if c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSON ||
-				c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSONCharsetUTF8 {
-				c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
+			if c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSON {
+				c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			}
 
 			// Check hash from request
