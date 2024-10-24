@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/rombintu/goyametricsv2/internal/logger"
+	"github.com/rombintu/goyametricsv2/lib/myparser"
 	"go.uber.org/zap"
 )
 
@@ -54,14 +55,14 @@ func (d *tmpDriver) Ping() error {
 func (d *tmpDriver) Update(mtype, mname, mvalue string) (err error) {
 	switch mtype {
 	case GaugeType:
-		var value float64
-		if value, err = strconv.ParseFloat(mvalue, 64); err != nil {
+		value, err := myparser.Str2Float64(mvalue)
+		if err != nil {
 			return err
 		}
 		d.updateGauge(mname, value)
 	case CounterType:
-		var value int64
-		if value, err = strconv.ParseInt(mvalue, 10, 64); err != nil {
+		value, err := myparser.Str2Int64(mvalue)
+		if err != nil {
 			return err
 		}
 		d.updateCounter(mname, value)

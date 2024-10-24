@@ -15,15 +15,6 @@ const (
 	// PgxDriver is a PostgreSQL storage using pgx library.
 	PgxDriver = "pgx"
 	// InfluxDriver is a InfluxDB storage using influxdb-client-go library.
-	InfluxDriver = "influxdb"
-	// ElasticsearchDriver is a Elasticsearch storage using elasticsearch-go library.
-	ElasticsearchDriver = "elasticsearch"
-	// ConsulDriver is a Consul storage using consul-go-api library.
-	ConsulDriver = "consul"
-	// RedisDriver is a Redis storage using redis-go library.
-	RedisDriver = "redis"
-	// S3Driver is a S3 storage using minio library.
-	S3Driver = "s3"
 )
 
 const memPath string = ""

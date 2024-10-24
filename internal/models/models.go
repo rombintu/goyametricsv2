@@ -1,9 +1,10 @@
 package internal
 
 import (
-	"strconv"
+	"fmt"
 
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/myparser"
 )
 
 type Metrics struct {
@@ -14,17 +15,18 @@ type Metrics struct {
 }
 
 func (m *Metrics) SetValueOrDelta(s string) (err error) {
+	// Optimizated
 	switch m.MType {
 	case storage.GaugeType:
-		var vval float64
-		if vval, err = strconv.ParseFloat(s, 64); err != nil {
-			return err
+		vval, err := myparser.Str2Float64(s)
+		if err != nil {
+			return fmt.Errorf("failed to parse gauge value: %w", err)
 		}
 		m.setValue(vval)
 	case storage.CounterType:
-		var dval int64
-		if dval, err = strconv.ParseInt(s, 10, 64); err != nil {
-			return err
+		dval, err := myparser.Str2Int64(s)
+		if err != nil {
+			return fmt.Errorf("failed to parse counter value: %w", err)
 		}
 		m.setDelta(dval)
 	}

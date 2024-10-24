@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"go.uber.org/zap"
 )
