@@ -3,7 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo-contrib/pprof"
+	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/internal/storage"
@@ -31,6 +32,7 @@ func (s *Server) Configure() {
 	s.ConfigureMiddlewares()
 	s.ConfigureRouter()
 	s.ConfigureStorage()
+	s.ConfigurePprof()
 }
 
 func (s *Server) Run() {
@@ -86,6 +88,10 @@ func (s *Server) ConfigureMiddlewares() {
 
 	// Оборачиваем middleware чтобы передать ключ
 	s.router.Use(myhash.HashCheckMiddleware(s.config.HashKey))
+}
+
+func (s *Server) ConfigurePprof() {
+	pprof.Register(s.router)
 }
 
 func (s *Server) syncStorage() {

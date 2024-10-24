@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"go.uber.org/zap"
 )
@@ -40,9 +40,8 @@ func HashCheckMiddleware(key string) echo.MiddlewareFunc {
 			}
 			defer c.Request().Body.Close()
 
-			if c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSON ||
-				c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSONCharsetUTF8 {
-				c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
+			if c.Request().Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSON {
+				c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			}
 
 			// Check hash from request
