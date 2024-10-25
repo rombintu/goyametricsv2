@@ -14,56 +14,154 @@ import (
 	"go.uber.org/zap"
 )
 
+// MetricsHandler handles HTTP requests to update metrics in the server's storage system.
+// It processes incoming requests to update specific metrics based on the provided parameters
+// and stores the updated values in the server's storage system.
+//
+// Endpoint:
+//   - URL: /metrics/:mtype/:mname/:mvalue
+//   - Method: POST
+//
+// Parameters:
+//   - mtype: The type of the metric (e.g., "counter", "gauge"). This is a path parameter extracted from the URL.
+//   - mname: The name or identifier of the metric. This is a path parameter extracted from the URL.
+//   - mvalue: The value to be assigned to the metric. This is a path parameter extracted from the URL.
+//
+// Request Example:
+//
+//	POST /metrics/counter/requests/10
+//
+// Response:
+//   - Status: 200 OK
+//   - Body: "updated"
+//   - Status: 400 Bad Request (if there is an error during the update)
+//   - Body: Error message
+//   - Status: 404 Not Found (if the metric name is missing)
+//   - Body: "Missing metric name"
 func (s *Server) MetricsHandler(c echo.Context) error {
+	// Extract the metric type, name, and value from the request parameters
 	mtype := c.Param("mtype")
 	mname := c.Param("mname")
 	mvalue := c.Param("mvalue")
 
+	// Check if the metric name is missing
 	if mname == "" {
+		// Return a 404 Not Found status with an error message
 		return c.String(http.StatusNotFound, "Missing metric name")
 	}
+	// Attempt to update the metric in the storage system
 	if err := s.storage.Update(mtype, mname, mvalue); err != nil {
+		// Log the error with additional context
 		logger.Log.Error(
 			err.Error(),
 			zap.String("type", mtype),
 			zap.String("id/name", mname),
 			zap.String("value", mvalue),
 		)
+		// Return a 400 Bad Request status with the error message
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	// Если 0 то синхронная запись. По хорошему это засунуть в мидлварю конечно
+	// If sync mode is enabled, perform a synchronous storage update
 	if s.config.SyncMode {
 		s.syncStorage()
 	}
-
+	// Return a 200 OK status with a success message
 	return c.String(http.StatusOK, "updated")
 }
 
+// MetricGetHandler handles HTTP requests to retrieve the value of a specific metric from the server's storage system.
+// It processes incoming requests to fetch the value of a metric based on the provided parameters.
+//
+// Endpoint:
+//   - URL: /metrics/:mtype/:mname
+//   - Method: GET
+//
+// Parameters:
+//   - mtype: The type of the metric (e.g., "counter", "gauge"). This is a path parameter extracted from the URL.
+//   - mname: The name or identifier of the metric. This is a path parameter extracted from the URL.
+//
+// Request Example:
+//
+//	GET /metrics/counter/requests
+//
+// Response:
+//   - Status: 200 OK
+//   - Body: The value of the metric
+//   - Status: 404 Not Found (if the metric is not found)
+//   - Body: "not found"
 func (s *Server) MetricGetHandler(c echo.Context) error {
+	// Extract the metric type and name from the request parameters
 	mtype := c.Param("mtype")
 	mname := c.Param("mname")
+	// Attempt to retrieve the metric value from the storage system
 	value, err := s.storage.Get(mtype, mname)
 	if err != nil {
+		// Log the error with additional context
 		logger.Log.Error(err.Error(), zap.String("type", mtype), zap.String("id/name", mname))
+		// Return a 404 Not Found status with an error message
 		return c.String(http.StatusNotFound, "not found")
 	}
+	// Return a 200 OK status with the metric value
 	return c.String(http.StatusOK, value)
 }
 
+// RootHandler handles HTTP requests to render the root page of the server, displaying all metrics.
+// It processes incoming requests to fetch all metrics from the storage system and renders them using a template.
+//
+// Endpoint:
+//   - URL: /
+//   - Method: GET
+//
+// Request Example:
+//
+//	GET /
+//
+// Response:
+//   - Status: 200 OK
+//   - Body: Rendered HTML content displaying all metrics
 func (s *Server) RootHandler(c echo.Context) error {
+	// Render the metrics.html template with all metrics from the storage system
 	return c.Render(http.StatusOK, "metrics.html", s.storage.GetAll())
 }
 
-// route for /update. Content-Type: application/json
+// MetricUpdateHandlerJSON handles HTTP requests to update metrics in the server's storage system using JSON payloads.
+// It processes incoming requests to update specific metrics based on the provided JSON payload and stores the updated values in the server's storage system.
+//
+// Endpoint:
+//   - URL: /update
+//   - Method: POST
+//   - Content-Type: application/json
+//
+// Request Body Example:
+//
+//	{
+//	  "id": "requests",
+//	  "mtype": "counter",
+//	  "delta": 10,
+//	  "value": null
+//	}
+//
+// Response:
+//   - Status: 200 OK
+//   - Content-Type: application/json
+//   - Body: The updated metric in JSON format
+//   - Status: 400 Bad Request (if there is an error during the update or parsing)
+//   - Body: Error message
+//   - Status: 500 Internal Server Error (if there is an error encoding JSON)
+//   - Body: "Failed to encode JSON"
 func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
+	// Define a variable to hold the decoded metric
 	var metric models.Metrics
 
+	// Decode the JSON payload from the request body into the metric variable
 	if err := json.NewDecoder(c.Request().Body).Decode(&metric); err != nil {
 		logger.Log.Error(err.Error())
+		// Return a 400 Bad Request status with the error message
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
+	// Log the decoded metric for debugging purposes
 	logger.Log.Debug(
 		"Try decode metric",
 		zap.String("id", metric.ID),
@@ -72,43 +170,49 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 		zap.Any("value", metric.Value),
 	)
 
+	// Initialize a variable to hold the parsed metric value
 	var mvalue string
-	// Парсим то что нужно, взависимости от типа, делаем строку чтобы не менять логику
+	// Parse the metric value based on its type
 	switch metric.MType {
 	case storage.GaugeType:
+		// Ensure the value is not nil for gauge type
 		if metric.Value == nil {
 			err := errors.New("delta must be not null")
 			logger.Log.Error(err.Error())
 			return c.String(http.StatusBadRequest, err.Error())
 		}
-		// Если все ок то парсим
+		// Convert the float value to a string
 		mvalue = strconv.FormatFloat(*metric.Value, 'g', -1, 64)
 	case storage.CounterType:
+		// Ensure the delta is not nil for counter type
 		if metric.Delta == nil {
 			err := errors.New("delta must be not null")
 			logger.Log.Error(err.Error())
 			return c.String(http.StatusBadRequest, err.Error())
 		}
-		// Если все ок то парсим
+		// Convert the int64 delta to a string
 		mvalue = strconv.FormatInt(*metric.Delta, 10)
 	}
 
+	// Log the parsed value for debugging purposes
 	logger.Log.Debug("Parse", zap.String("value", mvalue))
 
+	// Attempt to update the metric in the storage system
 	if err := s.storage.Update(metric.MType, metric.ID, mvalue); err != nil {
 		logger.Log.Error(
 			err.Error(), zap.String("type", metric.MType),
 			zap.String("id", metric.ID), zap.String("value", mvalue),
 		)
+		// Return a 400 Bad Request status with the error message
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	// Если 0 то синхронная запись. По хорошему это засунуть в мидлварю конечно
+	// If sync mode is enabled, perform a synchronous storage update
 	if s.config.SyncMode {
 		s.syncStorage()
 	}
 
-	// add HashSHA256 to Header
+	// If a hash key is configured, add a SHA256 hash to the response header
 	if s.config.HashKey != "" {
 		bytesData, err := json.Marshal(metric)
 		if err != nil {
@@ -116,36 +220,31 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 		}
 		c.Response().Header().Set(myhash.Sha256Header, myhash.ToSHA256AndHMAC(bytesData, s.config.HashKey))
 	}
+	// Set the response content type to JSON
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	// Write the HTTP status code
 	c.Response().WriteHeader(http.StatusOK)
 
+	// Encode and return the updated metric in JSON format
 	return json.NewEncoder(c.Response()).Encode(metric)
 }
 
-// route for /updates. Content-Type: application/json
 func (s *Server) MetricUpdatesHandlerJSON(c echo.Context) error {
+	// Define a variable to hold the decoded metrics
 	var metrics []models.Metrics
 
+	// Decode the JSON payload from the request body into the metric variable
 	if err := json.NewDecoder(c.Request().Body).Decode(&metrics); err != nil {
+		// Log the error
 		logger.Log.Error(err.Error())
+		// Return a 400 Bad Request status with the error message
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
+	// Log the decoded metric for debugging purposes
 	logger.Log.Debug(
 		"Try decode metrics", zap.Int("size", len(metrics)),
 	)
-
-	// Нет времени делать тесты)
-	if len(metrics) < 11 {
-		for _, m := range metrics {
-			logger.Log.Debug(
-				"metric", zap.String("name", m.ID),
-				zap.String("type", m.MType),
-				zap.Any("delta", m.Delta),
-				zap.Any("value", m.Value),
-			)
-		}
-	}
 
 	data := storage.Data{
 		Counters: make(storage.Counters),
