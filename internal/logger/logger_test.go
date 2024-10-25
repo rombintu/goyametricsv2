@@ -7,7 +7,7 @@ import (
 )
 
 func TestInitialize(t *testing.T) {
-	var Log *zap.Logger = zap.NewNop()
+	Log := zap.NewNop()
 	type args struct {
 		mode string
 	}
