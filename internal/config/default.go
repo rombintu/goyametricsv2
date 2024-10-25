@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 )
@@ -46,13 +45,6 @@ type DatabaseConfig struct {
 	Host string `yaml:"db_host" env-default:"localhost"`
 	Port string `yaml:"db_port" env-default:"5432"`
 	Name string `yaml:"db_name" env-default:"metrics"`
-}
-
-func (db *DatabaseConfig) ToPlainText() string {
-	return fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s sslmode=disable",
-		db.Host, db.User, db.Pass, db.Name,
-	)
 }
 
 func tryLoadFromEnv(key, fromFlags string) string {

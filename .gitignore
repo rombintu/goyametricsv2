@@ -45,3 +45,5 @@ create_table_metrics.sql
 *.sql
 
 *session.sql
+
+!profiles/cover.out

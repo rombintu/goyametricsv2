@@ -78,11 +78,6 @@ func (s *Server) ConfigureMiddlewares() {
 	logger.Initialize(s.config.EnvMode)
 	s.router.Use(logger.RequestLogger)
 
-	// Реализация gzip middleware в пару строк, больше ничего не нужно
-	// s.router.Use(middleware.GzipWithConfig(middleware.GzipConfig{
-	// 	Level: middleware.DefaultGzipConfig.Level,
-	// }))
-
 	// Реализация gzip middleware для тз
 	s.router.Use(mygzip.GzipMiddleware)
 

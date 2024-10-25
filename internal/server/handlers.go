@@ -58,13 +58,6 @@ func (s *Server) RootHandler(c echo.Context) error {
 // route for /update. Content-Type: application/json
 func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 	var metric models.Metrics
-	// Таким макаром можно сериализовать запрос
-	// if err := c.Bind(&metric); err != nil {
-	// 	return c.String(http.StatusBadRequest, err.Error())
-	// }
-
-	// А таким отправлять
-	// return c.JSON(http.StatusOK, metric)
 
 	if err := json.NewDecoder(c.Request().Body).Decode(&metric); err != nil {
 		logger.Log.Error(err.Error())

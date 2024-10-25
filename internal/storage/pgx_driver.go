@@ -49,22 +49,6 @@ func NewPgxDriver(dbURL string) *pgxDriver {
 	}
 }
 
-// На будущее, возможно придется переделывать на что то такое
-
-// func Initialize(dbURL string) (*sql.DB, error) {
-// 	db, err := sql.Open(pgxName, dbURL)
-// 	if err != nil {
-// 		log.Fatalf("Error opening database: %v", err)
-// 	}
-// 	// Set the maximum number of open connections
-// 	db.SetMaxOpenConns(25)
-// 	// Set the maximum number of idle connections
-// 	db.SetMaxIdleConns(25)
-// 	// Set the maximum lifetime of a connection
-// 	db.SetConnMaxLifetime(5 * time.Minute)
-// 	return db, nil
-// }
-
 func (d *pgxDriver) Open() error {
 	pool, err := pgxpool.New(context.Background(), d.dbURL)
 	if err != nil {
