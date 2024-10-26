@@ -26,31 +26,44 @@ import (
 	"go.uber.org/zap"
 )
 
+// Agent represents the agent that collects and reports metrics to the server.
 type Agent struct {
-	serverAddress  string
-	pollInterval   int64
-	reportInterval int64
-	data           Data // TODO
-	pollCount      int
-	hashKey        string
-	rateLimit      int64
-	semaphore      *patterns.Semaphore
+	serverAddress  string              // The address of the server to which metrics are reported
+	pollInterval   int64               // The interval at which metrics are polled
+	reportInterval int64               // The interval at which metrics are reported to the server
+	data           Data                // The collected metrics data
+	pollCount      int                 // The count of polls performed
+	hashKey        string              // The key used for hashing the metrics data
+	rateLimit      int64               // The rate limit for sending metrics
+	semaphore      *patterns.Semaphore // Semaphore to control the rate limit
 }
 
+// Data represents the collected metrics data, including counters and gauges.
 type Data struct {
-	Counters []Counter
-	Gauges   []Gauge
+	Counters []Counter // The collected counter metrics
+	Gauges   []Gauge   // The collected gauge metrics
 }
 
+// Counter represents a counter metric with a name and value.
 type Counter struct {
-	name  string
-	value int64
-}
-type Gauge struct {
-	name  string
-	value float64
+	name  string // The name of the counter metric
+	value int64  // The value of the counter metric
 }
 
+// Gauge represents a gauge metric with a name and value.
+type Gauge struct {
+	name  string  // The name of the gauge metric
+	value float64 // The value of the gauge metric
+}
+
+// NewAgent creates a new instance of the Agent with the provided configuration.
+// It initializes the agent with the server address, poll interval, report interval, and other settings.
+//
+// Parameters:
+// - c: The configuration for the agent.
+//
+// Returns:
+// - A pointer to the newly created Agent instance.
 func NewAgent(c config.AgentConfig) *Agent {
 	return &Agent{
 		serverAddress:  fixServerURL(c.Address),
@@ -62,13 +75,22 @@ func NewAgent(c config.AgentConfig) *Agent {
 	}
 }
 
+// Configure configures the agent by setting up the semaphore if a rate limit is specified.
 func (a *Agent) Configure() {
-	// Configure semaphore
+	// Configure semaphore if rate limit is greater than 0
 	if a.rateLimit > 0 {
 		a.semaphore = patterns.NewSemaphore(a.rateLimit)
 	}
 }
 
+// fixServerURL ensures that the server URL starts with "http://".
+// If the URL does not start with "http://", it prepends "http://" to the URL.
+//
+// Parameters:
+// - url: The server URL to be fixed.
+//
+// Returns:
+// - The fixed server URL.
 func fixServerURL(url string) string {
 	if strings.HasPrefix(url, "http://") {
 		return url
@@ -77,10 +99,20 @@ func fixServerURL(url string) string {
 	}
 }
 
+// incPollCount increments the poll count by 1.
 func (a *Agent) incPollCount() {
 	a.pollCount++
 }
 
+// postRequestJSON sends a POST request with JSON data to the specified URL.
+// It compresses the data using gzip and includes a hash if a secret key is set.
+//
+// Parameters:
+// - url: The URL to which the request is sent.
+// - data: The data to be sent in the request body.
+//
+// Returns:
+// - An error if the request fails, otherwise nil.
 func (a *Agent) postRequestJSON(url string, data any) error {
 	if err := a.TryConnectToServer(); err != nil {
 		return err
@@ -111,7 +143,7 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 		return err
 	}
 
-	// If secret key is set
+	// If secret key is set, include the hash in the request header
 	if a.hashKey != "" {
 		hashPayload := myhash.ToSHA256AndHMAC(jsonData, a.hashKey)
 		req.Header.Set(myhash.Sha256Header, hashPayload)
@@ -131,6 +163,14 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 	return nil
 }
 
+// sendAllDataOnServer sends all collected metrics data to the server.
+// It converts the data into the appropriate format and sends it using a POST request.
+//
+// Parameters:
+// - data: The data to be sent to the server.
+//
+// Returns:
+// - An error if the request fails, otherwise nil.
 func (a *Agent) sendAllDataOnServer(data Data) error {
 	url := fmt.Sprintf("%s/updates/", a.serverAddress)
 	var metrics []models.Metrics
@@ -159,6 +199,12 @@ func (a *Agent) sendAllDataOnServer(data Data) error {
 	return nil
 }
 
+// RunReport runs the report worker that sends collected metrics to the server at the specified interval.
+// It listens for the context to be done to gracefully shut down.
+//
+// Parameters:
+// - ctx: The context to manage the lifecycle of the worker.
+// - wg: The wait group to synchronize the shutdown of the worker.
 func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
@@ -186,9 +232,14 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 			time.Sleep(time.Duration(a.reportInterval) * time.Second)
 		}
 	}
-
 }
 
+// RunPoll runs the poll worker that collects metrics at the specified interval.
+// It listens for the context to be done to gracefully shut down.
+//
+// Parameters:
+// - ctx: The context to manage the lifecycle of the worker.
+// - wg: The wait group to synchronize the shutdown of the worker.
 func (a *Agent) RunPoll(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
@@ -202,10 +253,14 @@ func (a *Agent) RunPoll(ctx context.Context, wg *sync.WaitGroup) {
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
 	}
-
 }
 
-// Add one more gorutine
+// RunPollv2 runs an additional poll worker that collects optional metrics at the specified interval.
+// It listens for the context to be done to gracefully shut down.
+//
+// Parameters:
+// - ctx: The context to manage the lifecycle of the worker.
+// - wg: The wait group to synchronize the shutdown of the worker.
 func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for {
@@ -230,9 +285,13 @@ func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
 	}
-
 }
 
+// loadPSUtilsMetrics collects optional metrics using the gopsutil library.
+// It collects metrics related to memory and CPU utilization.
+//
+// Returns:
+// - The collected optional metrics data.
 func (a *Agent) loadPSUtilsMetrics() Data {
 	v, err := mem.VirtualMemory()
 	if err != nil {
@@ -256,6 +315,8 @@ func (a *Agent) loadPSUtilsMetrics() Data {
 	}
 }
 
+// loadMetrics collects common metrics using the runtime package.
+// It collects metrics related to memory and CPU utilization.
 func (a *Agent) loadMetrics() {
 	var metrics runtime.MemStats
 	runtime.ReadMemStats(&metrics)
@@ -282,10 +343,9 @@ func (a *Agent) loadMetrics() {
 				value: v,
 			})
 		}
-
 	}
 
-	// get random float64 value
+	// Get random float64 value
 	randomValue := rand.Float64()
 	gauges = append(gauges, Gauge{
 		name:  "RandomValue",
@@ -295,9 +355,12 @@ func (a *Agent) loadMetrics() {
 
 	a.data.Counters = counters
 	a.data.Gauges = gauges
-
 }
 
+// Ping sends a GET request to the server's ping endpoint to check the connection.
+//
+// Returns:
+// - An error if the request fails, otherwise nil.
 func (a *Agent) Ping() error {
 	resp, err := http.Get(a.serverAddress + "/ping")
 	if err != nil {
@@ -307,6 +370,11 @@ func (a *Agent) Ping() error {
 	return nil
 }
 
+// TryConnectToServer attempts to connect to the server by sending a ping request.
+// It retries the connection up to 5 times with increasing intervals if the initial attempt fails.
+//
+// Returns:
+// - An error if the connection fails after all retries, otherwise nil.
 func (a *Agent) TryConnectToServer() error {
 	var err error
 	if err = a.Ping(); err != nil {

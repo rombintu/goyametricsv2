@@ -229,6 +229,47 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 	return json.NewEncoder(c.Response()).Encode(metric)
 }
 
+// MetricUpdatesHandlerJSON handles requests to update metrics in JSON format.
+// It decodes the JSON payload from the request body into a slice of Metrics,
+// updates the corresponding values in the storage, and returns the updated metrics in the response.
+//
+// Example Request:
+// POST /update
+// Content-Type: application/json
+//
+// [
+//
+//	{
+//	  "id": "metric1",
+//	  "type": "counter",
+//	  "delta": 5
+//	},
+//	{
+//	  "id": "metric2",
+//	  "type": "gauge",
+//	  "value": 10.5
+//	}
+//
+// ]
+//
+// Example Response:
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+//
+// [
+//
+//	{
+//	  "id": "metric1",
+//	  "type": "counter",
+//	  "delta": 5
+//	},
+//	{
+//	  "id": "metric2",
+//	  "type": "gauge",
+//	  "value": 10.5
+//	}
+//
+// ]
 func (s *Server) MetricUpdatesHandlerJSON(c echo.Context) error {
 	// Define a variable to hold the decoded metrics
 	var metrics []models.Metrics
@@ -272,7 +313,7 @@ func (s *Server) MetricUpdatesHandlerJSON(c echo.Context) error {
 		return err
 	}
 
-	// Если 0 то синхронная запись. По хорошему это засунуть в мидлварю конечно
+	// Если 0 то синхронная запись
 	if s.config.SyncMode {
 		s.syncStorage()
 	}
@@ -291,44 +332,91 @@ func (s *Server) MetricUpdatesHandlerJSON(c echo.Context) error {
 	return json.NewEncoder(c.Response()).Encode(metrics)
 }
 
-// route for /value. Content-Type: application/json
+// MetricValueHandlerJSON handles requests to retrieve the value of a specific metric in JSON format.
+// It decodes the JSON payload from the request body into a Metrics struct,
+// retrieves the corresponding value from the storage, and returns the metric with its value in the response.
+//
+// Example Request:
+// POST /value
+// Content-Type: application/json
+//
+//	{
+//	  "id": "metric1",
+//	  "type": "counter"
+//	}
+//
+// Example Response:
+// HTTP/1.1 200 OK
+// Content-Type: application/json
+//
+//	{
+//	  "id": "metric1",
+//	  "type": "counter",
+//	  "delta": 5
+//	}
 func (s *Server) MetricValueHandlerJSON(c echo.Context) error {
 	var metric models.Metrics
-
+	// Decode the JSON payload from the request body into the metric variable
 	if err := json.NewDecoder(c.Request().Body).Decode(&metric); err != nil {
 		logger.Log.Error(err.Error())
+		// Return a 400 Bad Request status with the error message
 		return c.String(http.StatusBadRequest, err.Error())
 	}
+	// Retrieve the metric value from the storage
 	mvalue, err := s.storage.Get(metric.MType, metric.ID)
 	if err != nil {
+		// Log the error with additional details
 		logger.Log.Error(err.Error(), zap.String("type", metric.MType), zap.String("id", metric.ID))
+		// Return a 404 Not Found status with a custom message
 		return c.String(http.StatusNotFound, "not found")
 	}
 
-	// Функция чтобы не повторяться в агенте
+	// Set the value or delta of the metric based on the retrieved value
 	if err := metric.SetValueOrDelta(mvalue); err != nil {
 		logger.Log.Error(err.Error(), zap.String("value", mvalue))
+		// Return a 400 Bad Request status with the error message
 		return c.String(http.StatusBadRequest, err.Error())
 	}
 
-	// add HashSHA256 to Header
+	// Add HashSHA256 to the response header if a hash key is configured
 	if s.config.HashKey != "" {
 		bytesData, err := json.Marshal(metric)
 		if err != nil {
+			// Return a 500 Internal Server Error status with a custom message
 			return c.String(http.StatusInternalServerError, "Failed to encode JSON")
 		}
 		c.Response().Header().Set(myhash.Sha256Header, myhash.ToSHA256AndHMAC(bytesData, s.config.HashKey))
 	}
+	// Set the response content type to JSON and write the response header
 	c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	c.Response().WriteHeader(http.StatusOK)
-
+	// Encode the metric with its value and send it in the response
 	return json.NewEncoder(c.Response()).Encode(metric)
 }
 
-// route for /ping. Content-Type: application/json
+// PingDatabase handles requests to check the connection to the database.
+// It attempts to ping the database and returns a status response based on the result.
+//
+// Example Request:
+// GET /ping
+//
+// Example Response (Success):
+// HTTP/1.1 200 OK
+// Content-Type: text/plain
+//
+// # OK
+//
+// Example Response (Failure):
+// HTTP/1.1 500 Internal Server Error
+// Content-Type: text/plain
+//
+// <error message>
 func (s *Server) PingDatabase(c echo.Context) error {
+	// Attempt to ping the database
 	if err := s.storage.Ping(); err != nil {
+		// Return a 500 Internal Server Error status with the error message
 		return c.String(http.StatusInternalServerError, err.Error())
 	}
+	// Return a 200 OK status with a success message
 	return c.String(http.StatusOK, "OK")
 }
