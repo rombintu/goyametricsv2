@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/ptrhelper"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMetrics_setDelta(t *testing.T) {
@@ -22,19 +24,19 @@ func TestMetrics_setDelta(t *testing.T) {
 		args   args
 	}{
 		{
-			name: "set delta with minus",
+			name: "set_delta_with_minus",
 			fields: fields{
 				ID:    "1",
 				MType: storage.CounterType,
-				Delta: int64Ptr(-1),
+				Delta: ptrhelper.Int64Ptr(-1),
 			},
 		},
 		{
-			name: "set delta with plus",
+			name: "set_delta_with_plus",
 			fields: fields{
 				ID:    "2",
 				MType: storage.CounterType,
-				Delta: int64Ptr(1),
+				Delta: ptrhelper.Int64Ptr(1),
 			},
 		},
 	}
@@ -47,16 +49,9 @@ func TestMetrics_setDelta(t *testing.T) {
 				Value: tt.fields.Value,
 			}
 			m.setDelta(tt.args.delta)
+			assert.Equal(t, &tt.args.delta, m.Delta, "Delta should be set correctly")
 		})
 	}
-}
-
-func int64Ptr(i int64) *int64 {
-	return &i
-}
-
-func float64Ptr(f float64) *float64 {
-	return &f
 }
 
 func TestMetrics_setValue(t *testing.T) {
@@ -75,19 +70,19 @@ func TestMetrics_setValue(t *testing.T) {
 		args   args
 	}{
 		{
-			name: "set value with minus",
+			name: "set_value_with_minus",
 			fields: fields{
 				ID:    "1",
 				MType: storage.CounterType,
-				Value: float64Ptr(-1),
+				Value: ptrhelper.Float64Ptr(-1),
 			},
 		},
 		{
-			name: "set value with plus",
+			name: "se_ value_with_plus",
 			fields: fields{
 				ID:    "2",
 				MType: storage.CounterType,
-				Value: float64Ptr(1),
+				Value: ptrhelper.Float64Ptr(1),
 			},
 		},
 	}
@@ -100,6 +95,7 @@ func TestMetrics_setValue(t *testing.T) {
 				Value: tt.fields.Value,
 			}
 			m.setValue(tt.args.value)
+			assert.Equal(t, &tt.args.value, m.Value, "Value should be set correctly")
 		})
 	}
 }
@@ -121,22 +117,22 @@ func TestMetrics_SetValueOrDelta(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "set with minus",
+			name: "set_with_minus",
 			fields: fields{
 				ID:    "1",
 				MType: storage.CounterType,
-				Delta: int64Ptr(1),
-				Value: float64Ptr(-1),
+				Delta: ptrhelper.Int64Ptr(1),
+				Value: ptrhelper.Float64Ptr(-1),
 			},
 			wantErr: true,
 		},
 		{
-			name: "set with plus",
+			name: "set_with_plus",
 			fields: fields{
 				ID:    "2",
 				MType: storage.CounterType,
-				Delta: int64Ptr(1),
-				Value: float64Ptr(1),
+				Delta: ptrhelper.Int64Ptr(1),
+				Value: ptrhelper.Float64Ptr(1),
 			},
 			wantErr: true,
 		},

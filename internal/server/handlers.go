@@ -64,7 +64,7 @@ func (s *Server) MetricsHandler(c echo.Context) error {
 
 	// If sync mode is enabled, perform a synchronous storage update
 	if s.config.SyncMode {
-		s.syncStorage()
+		s.SyncStorage()
 	}
 	// Return a 200 OK status with a success message
 	return c.String(http.StatusOK, "updated")
@@ -209,7 +209,7 @@ func (s *Server) MetricUpdateHandlerJSON(c echo.Context) error {
 
 	// If sync mode is enabled, perform a synchronous storage update
 	if s.config.SyncMode {
-		s.syncStorage()
+		s.SyncStorage()
 	}
 
 	// If a hash key is configured, add a SHA256 hash to the response header
@@ -315,7 +315,7 @@ func (s *Server) MetricUpdatesHandlerJSON(c echo.Context) error {
 
 	// Если 0 то синхронная запись
 	if s.config.SyncMode {
-		s.syncStorage()
+		s.SyncStorage()
 	}
 
 	// add HashSHA256 to Header

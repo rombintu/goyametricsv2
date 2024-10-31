@@ -15,13 +15,13 @@ func TestStr2Float64(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "simple toString",
+			name:    "simple_toString",
 			args:    args{"1.0"},
 			want:    1,
 			wantErr: false,
 		},
 		{
-			name:    "simple error toString",
+			name:    "simple_error_toString",
 			args:    args{"1-1"},
 			want:    0,
 			wantErr: true,
@@ -52,13 +52,13 @@ func TestStr2Int64(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "simple toString",
+			name:    "simple_toString",
 			args:    args{"1"},
 			want:    1,
 			wantErr: false,
 		},
 		{
-			name:    "simple error toString",
+			name:    "simple_error_toString",
 			args:    args{"1-1"},
 			want:    0,
 			wantErr: true,

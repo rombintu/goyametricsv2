@@ -47,7 +47,7 @@ func main() {
 			for {
 				select {
 				case <-ticker.C:
-					server.SyncStorageInterval()
+					server.SyncStorage()
 				case <-done:
 					logger.Log.Debug("worker is shutdown", zap.String("name", "sync_storage"))
 					return

@@ -14,6 +14,7 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/mocks"
 	models "github.com/rombintu/goyametricsv2/internal/models"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/ptrhelper"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -136,7 +137,7 @@ func TestServer_MetricGetHandler(t *testing.T) {
 	s := NewServer(m, config.ServerConfig{})
 	s.ConfigureRouter()
 
-	m.EXPECT().Get(counterMetricType, "counter1").Return("1", nil)
+	m.EXPECT().Get(counterMetricType, "counter1").Return("1", nil).AnyTimes()
 	m.EXPECT().Get(counterMetricType, "unknown").Return("", errors.New("not found"))
 
 	type want struct {
@@ -211,19 +212,20 @@ func TestServer_MetricUpdateHandlerJSON(t *testing.T) {
 	validMetric := models.Metrics{
 		ID:    "test_metric",
 		MType: counterMetricType,
-		Delta: int64Ptr(10),
+		Delta: ptrhelper.Int64Ptr(10),
 	}
 
 	invalidMetric := models.Metrics{
 		ID:    "invalid_metric",
 		MType: "invalid",
-		Delta: int64Ptr(10),
+		Delta: ptrhelper.Int64Ptr(10),
 	}
 
 	t.Run("ValidMetric", func(t *testing.T) {
 		m.EXPECT().Update(counterMetricType, validMetric.ID, "10").Return(nil)
-		m.EXPECT().Save().Return(nil)
-		m.EXPECT().Close().Return(nil)
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
 		body, _ := json.Marshal(validMetric)
 		req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewBuffer(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -240,8 +242,8 @@ func TestServer_MetricUpdateHandlerJSON(t *testing.T) {
 	// Тест на невалидные данные
 	t.Run("InvalidMetric", func(t *testing.T) {
 		m.EXPECT().Update(invalidMetric.MType, invalidMetric.ID, "").Return(errors.New("invalid"))
-		// m.EXPECT().Save().Return(nil)
-		// m.EXPECT().Close().Return(nil)
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
 		body, _ := json.Marshal(invalidMetric)
 		req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewBuffer(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -254,14 +256,6 @@ func TestServer_MetricUpdateHandlerJSON(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
-}
-
-func int64Ptr(i int64) *int64 {
-	return &i
-}
-
-func float64Ptr(f float64) *float64 {
-	return &f
 }
 
 func TestServer_MetricUpdatesHandlerJSON(t *testing.T) {
@@ -290,19 +284,20 @@ func TestServer_MetricUpdatesHandlerJSON(t *testing.T) {
 		{
 			ID:    "c1",
 			MType: counterMetricType,
-			Delta: int64Ptr(10),
+			Delta: ptrhelper.Int64Ptr(10),
 		},
 		{
 			ID:    "g1",
 			MType: gaugeMetricType,
-			Value: float64Ptr(10),
+			Value: ptrhelper.Float64Ptr(10),
 		},
 	}
 
 	t.Run("UpdateMetricsJSON", func(t *testing.T) {
 		m.EXPECT().UpdateAll(data).Return(nil)
-		m.EXPECT().Save().Return(nil)
-		m.EXPECT().Close().Return(nil)
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
 		body, _ := json.Marshal(payload)
 		req := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewBuffer(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -336,8 +331,9 @@ func TestServer_MetricValueHandlerJSON(t *testing.T) {
 
 	t.Run("GetMetricJSON", func(t *testing.T) {
 		m.EXPECT().Get(counterMetricType, payload.ID).Return("10", nil)
-		m.EXPECT().Save().Return(nil)
-		m.EXPECT().Close().Return(nil)
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
 		body, _ := json.Marshal(payload)
 		req := httptest.NewRequest(http.MethodPost, "/value", bytes.NewBuffer(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -365,9 +361,9 @@ func TestServer_PingDatabase(t *testing.T) {
 	s.ConfigureRouter()
 
 	t.Run("PingDatabase", func(t *testing.T) {
-		m.EXPECT().Ping().Return(nil)
-		m.EXPECT().Save().Return(nil)
-		m.EXPECT().Close().Return(nil)
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
 		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
 		// req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		rec := httptest.NewRecorder()

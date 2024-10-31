@@ -113,27 +113,21 @@ func (s *Server) ConfigurePprof() {
 
 // syncStorage synchronizes the storage by saving any pending changes.
 // It logs any errors that occur during the save process.
-func (s *Server) syncStorage() {
+func (s *Server) SyncStorage() {
+	if err := s.storage.Ping(); err != nil {
+		return
+	}
 	if err := s.storage.Save(); err != nil {
 		logger.Log.Error("cannot save storage", zap.Error(err))
 	}
 	logger.Log.Debug("Storage synchronized", zap.String("path", s.config.StoragePath))
 }
 
-// SyncStorageInterval is a placeholder function for future expansion.
-// It currently pings the storage and synchronizes it.
-func (s *Server) SyncStorageInterval() {
-	if err := s.storage.Ping(); err != nil {
-		return
-	}
-	s.syncStorage()
-}
-
 // Shutdown gracefully shuts down the server.
 // It logs the shutdown process, synchronizes the storage, and closes the storage.
 func (s *Server) Shutdown() {
 	logger.Log.Info("Server is shutting down...")
-	s.syncStorage()
+	s.SyncStorage()
 
 	// Close storage pools on shutdown
 	if err := s.storage.Close(); err != nil {
