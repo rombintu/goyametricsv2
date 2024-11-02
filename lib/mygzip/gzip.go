@@ -1,3 +1,4 @@
+// Package mygzip gzipMiddleware
 package mygzip
 
 import (

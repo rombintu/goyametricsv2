@@ -1,3 +1,4 @@
+// Package config DefaultConfig
 package config
 
 import (

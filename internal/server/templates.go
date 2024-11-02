@@ -1,3 +1,4 @@
+// Package server internal server Templates
 package server
 
 import (

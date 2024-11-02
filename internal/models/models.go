@@ -1,3 +1,4 @@
+// Package internal models
 package internal
 
 import (
