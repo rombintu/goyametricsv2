@@ -468,3 +468,50 @@ func Test_tmpDriver_UpdateAll(t *testing.T) {
 		})
 	}
 }
+
+func Test_tmpDriver_Update(t *testing.T) {
+	data := &Data{
+		Counters: make(Counters),
+		Gauges:   make(Gauges),
+	}
+	type fields struct {
+		data      *Data
+		storepath string
+	}
+	type args struct {
+		mtype  string
+		mname  string
+		mvalue string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "update_some_value",
+			fields: fields{
+				data:      data,
+				storepath: "test.json",
+			},
+			args: args{
+				mtype:  CounterType,
+				mname:  "testing1",
+				mvalue: "1",
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &tmpDriver{
+				data:      tt.fields.data,
+				storepath: tt.fields.storepath,
+			}
+			if err := d.Update(tt.args.mtype, tt.args.mname, tt.args.mvalue); (err != nil) != tt.wantErr {
+				t.Errorf("tmpDriver.Update() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
