@@ -1,15 +1,20 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/mocks"
+	models "github.com/rombintu/goyametricsv2/internal/models"
+	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/ptrhelper"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -132,7 +137,7 @@ func TestServer_MetricGetHandler(t *testing.T) {
 	s := NewServer(m, config.ServerConfig{})
 	s.ConfigureRouter()
 
-	m.EXPECT().Get(counterMetricType, "counter1").Return("1", nil)
+	m.EXPECT().Get(counterMetricType, "counter1").Return("1", nil).AnyTimes()
 	m.EXPECT().Get(counterMetricType, "unknown").Return("", errors.New("not found"))
 
 	type want struct {
@@ -191,4 +196,183 @@ func TestServer_MetricGetHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServer_MetricUpdateHandlerJSON(t *testing.T) {
+	e := echo.New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	s := NewServer(m, config.ServerConfig{SyncMode: false})
+	defer s.Shutdown()
+	s.ConfigureRouter()
+
+	validMetric := models.Metrics{
+		ID:    "test_metric",
+		MType: counterMetricType,
+		Delta: ptrhelper.Int64Ptr(10),
+	}
+
+	invalidMetric := models.Metrics{
+		ID:    "invalid_metric",
+		MType: "invalid",
+		Delta: ptrhelper.Int64Ptr(10),
+	}
+
+	t.Run("ValidMetric", func(t *testing.T) {
+		m.EXPECT().Update(counterMetricType, validMetric.ID, "10").Return(nil)
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
+		body, _ := json.Marshal(validMetric)
+		req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewBuffer(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+
+		c := e.NewContext(req, rec)
+
+		err := s.MetricUpdateHandlerJSON(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+	// Тест на невалидные данные
+	t.Run("InvalidMetric", func(t *testing.T) {
+		m.EXPECT().Update(invalidMetric.MType, invalidMetric.ID, "").Return(errors.New("invalid"))
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
+		body, _ := json.Marshal(invalidMetric)
+		req := httptest.NewRequest(http.MethodPost, "/update", bytes.NewBuffer(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+
+		c := e.NewContext(req, rec)
+
+		err := s.MetricUpdateHandlerJSON(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+}
+
+func TestServer_MetricUpdatesHandlerJSON(t *testing.T) {
+	e := echo.New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	s := NewServer(m, config.ServerConfig{SyncMode: false})
+	defer s.Shutdown()
+	s.ConfigureRouter()
+
+	counters := make(storage.Counters)
+	counters["c1"] = 10
+
+	gauges := make(storage.Gauges)
+	gauges["g1"] = 10
+
+	data := storage.Data{
+		Counters: counters,
+		Gauges:   gauges,
+	}
+
+	payload := []models.Metrics{
+		{
+			ID:    "c1",
+			MType: counterMetricType,
+			Delta: ptrhelper.Int64Ptr(10),
+		},
+		{
+			ID:    "g1",
+			MType: gaugeMetricType,
+			Value: ptrhelper.Float64Ptr(10),
+		},
+	}
+
+	t.Run("UpdateMetricsJSON", func(t *testing.T) {
+		m.EXPECT().UpdateAll(data).Return(nil)
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/updates", bytes.NewBuffer(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+
+		c := e.NewContext(req, rec)
+
+		err := s.MetricUpdatesHandlerJSON(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+}
+
+func TestServer_MetricValueHandlerJSON(t *testing.T) {
+	e := echo.New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	s := NewServer(m, config.ServerConfig{SyncMode: false})
+	defer s.Shutdown()
+	s.ConfigureRouter()
+
+	payload := models.Metrics{
+		ID:    "c1",
+		MType: counterMetricType,
+	}
+
+	t.Run("GetMetricJSON", func(t *testing.T) {
+		m.EXPECT().Get(counterMetricType, payload.ID).Return("10", nil)
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/value", bytes.NewBuffer(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+
+		c := e.NewContext(req, rec)
+
+		err := s.MetricValueHandlerJSON(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
+}
+
+func TestServer_PingDatabase(t *testing.T) {
+	e := echo.New()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	s := NewServer(m, config.ServerConfig{SyncMode: false})
+	defer s.Shutdown()
+	s.ConfigureRouter()
+
+	t.Run("PingDatabase", func(t *testing.T) {
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
+		req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+		// req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+
+		c := e.NewContext(req, rec)
+
+		err := s.PingDatabase(c)
+
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
 }

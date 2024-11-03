@@ -3,7 +3,8 @@ package server
 import (
 	"net/http"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo-contrib/pprof"
+	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/internal/storage"
@@ -12,12 +13,22 @@ import (
 	"go.uber.org/zap"
 )
 
+// Server represents the main server struct that holds the configuration, storage, and router.
 type Server struct {
-	config  config.ServerConfig
-	storage storage.Storage
-	router  *echo.Echo
+	config  config.ServerConfig // Configuration for the server
+	storage storage.Storage     // Storage interface for managing data
+	router  *echo.Echo          // Echo router for handling HTTP requests
 }
 
+// NewServer creates a new instance of the Server with the provided storage and configuration.
+// It initializes the router and sets the configuration and storage for the server.
+//
+// Parameters:
+// - storage: The storage interface to be used by the server.
+// - config: The configuration for the server.
+//
+// Returns:
+// - A pointer to the newly created Server instance.
 func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
 	return &Server{
 		config:  config,
@@ -26,27 +37,34 @@ func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
 	}
 }
 
+// Configure sets up various components of the server, including the renderer, middlewares, router, storage, and pprof.
 func (s *Server) Configure() {
 	s.ConfigureRenderer()
 	s.ConfigureMiddlewares()
 	s.ConfigureRouter()
 	s.ConfigureStorage()
+	s.ConfigurePprof()
 }
 
+// Run starts the server by listening on the configured address and handling incoming requests.
+// It logs the server's starting URL and handles any errors that occur during the server's operation.
+// If an error occurs, it closes the storage and logs a fatal error.
 func (s *Server) Run() {
 	logger.Log.Info("Server is starting on: ", zap.String("url", s.config.Listen))
 	if err := http.ListenAndServe(s.config.Listen, s.router); err != nil {
-		// if error. Close connection or clear tmp
+		// If an error occurs, close the storage and log a fatal error
 		s.storage.Close()
 		logger.Log.Fatal("cannot run server", zap.Error(err))
 	}
 }
 
+// ConfigureStorage initializes the storage by opening it and optionally restoring data if the restore flag is set.
+// It logs the storage configuration and any errors that occur during the process.
 func (s *Server) ConfigureStorage() {
 	if err := s.storage.Open(); err != nil {
 		logger.Log.Fatal("cannot open storage", zap.Error(err))
 	}
-	// If restore flag is True, then restore the storage
+	// If the restore flag is true, restore the storage
 	if s.config.RestoreFlag {
 		if err := s.storage.Restore(); err != nil {
 			logger.Log.Warn("cannot restore storage", zap.String("error", err.Error()))
@@ -58,12 +76,14 @@ func (s *Server) ConfigureStorage() {
 	)
 }
 
+// ConfigureRouter sets up the routes for the server's router.
+// It defines the endpoints for handling various HTTP requests.
 func (s *Server) ConfigureRouter() {
 	s.router.GET("/", s.RootHandler)
 	s.router.GET("/value/:mtype/:mname", s.MetricGetHandler)
 	s.router.POST("/update/:mtype/:mname/:mvalue", s.MetricsHandler)
 
-	// JSON
+	// JSON endpoints
 	s.router.POST("/update/", s.MetricUpdateHandlerJSON)
 	s.router.POST("/value/", s.MetricValueHandlerJSON)
 
@@ -72,40 +92,42 @@ func (s *Server) ConfigureRouter() {
 	s.router.GET("/ping", s.PingDatabase)
 }
 
+// ConfigureMiddlewares sets up the middlewares for the server's router.
+// It initializes the logger, adds request logging, gzip compression, and hash checking middlewares.
 func (s *Server) ConfigureMiddlewares() {
 	logger.Initialize(s.config.EnvMode)
 	s.router.Use(logger.RequestLogger)
 
-	// Реализация gzip middleware в пару строк, больше ничего не нужно
-	// s.router.Use(middleware.GzipWithConfig(middleware.GzipConfig{
-	// 	Level: middleware.DefaultGzipConfig.Level,
-	// }))
-
-	// Реализация gzip middleware для тз
+	// Gzip middleware for compression
 	s.router.Use(mygzip.GzipMiddleware)
 
-	// Оборачиваем middleware чтобы передать ключ
+	// Hash check middleware for verifying request integrity
 	s.router.Use(myhash.HashCheckMiddleware(s.config.HashKey))
 }
 
-func (s *Server) syncStorage() {
+// ConfigurePprof registers the pprof handlers with the server's router.
+// This allows for profiling the server's performance.
+func (s *Server) ConfigurePprof() {
+	pprof.Register(s.router)
+}
+
+// syncStorage synchronizes the storage by saving any pending changes.
+// It logs any errors that occur during the save process.
+func (s *Server) SyncStorage() {
+	if err := s.storage.Ping(); err != nil {
+		return
+	}
 	if err := s.storage.Save(); err != nil {
 		logger.Log.Error("cannot save storage", zap.Error(err))
 	}
 	logger.Log.Debug("Storage synchronized", zap.String("path", s.config.StoragePath))
 }
 
-// Для дальнейшего расширения кода
-func (s *Server) SyncStorageInterval() {
-	if err := s.storage.Ping(); err != nil {
-		return
-	}
-	s.syncStorage()
-}
-
+// Shutdown gracefully shuts down the server.
+// It logs the shutdown process, synchronizes the storage, and closes the storage.
 func (s *Server) Shutdown() {
 	logger.Log.Info("Server is shutting down...")
-	s.syncStorage()
+	s.SyncStorage()
 
 	// Close storage pools on shutdown
 	if err := s.storage.Close(); err != nil {

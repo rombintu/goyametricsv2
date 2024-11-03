@@ -13,43 +13,54 @@ import (
 	"go.uber.org/zap"
 )
 
+// main is the entry point of the application.
+// It initializes the agent, configures it, and starts the necessary workers.
+// The application listens for termination signals to gracefully shut down.
 func main() {
+	// Create a context with cancel to manage the lifecycle of the application
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Initialize a wait group to synchronize the shutdown of all workers
 	wg := &sync.WaitGroup{}
 
+	// Load the agent configuration
 	conf := config.LoadAgentConfig()
 
+	// Create a new agent instance with the loaded configuration
 	a := agent.NewAgent(conf)
 	a.Configure()
 
+	// Initialize the logger with the environment mode from the configuration
 	logger.Initialize(conf.EnvMode)
 	logger.Log.Info("Agent starting", zap.String("address", conf.Address))
 
-	// Add poll worker
+	// Add and start the poll worker
 	wg.Add(1)
 	go a.RunPoll(ctx, wg)
 
-	// Add report worker
+	// Add and start the report worker
 	wg.Add(1)
 	go a.RunReport(ctx, wg)
 
-	// Add one more worker
+	// Add and start an additional poll worker (version 2)
 	wg.Add(1)
 	go a.RunPollv2(ctx, wg)
 
-	// Канал для перехвата сигналов
+	// Create a channel to capture termination signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
 
-	// Ожидание сигнала
+	// Start a goroutine to listen for termination signals
 	go func() {
+		// Wait for a signal to be received
 		sig := <-sigChan
-		logger.Log.Info("Received signal", zap.Any("sigrnal", sig))
+		logger.Log.Info("Received signal", zap.Any("signal", sig))
+		// Cancel the context to signal all workers to shut down
 		cancel()
 	}()
 
-	// Ожидание завершения всех горутин
+	// Wait for all workers to finish
 	wg.Wait()
 	logger.Log.Info("All workers have shut down. Exiting program.")
 }
