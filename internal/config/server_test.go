@@ -1,14 +1,23 @@
 package config
 
 import (
+	"flag"
 	"os"
-	"reflect"
 	"testing"
 )
 
 func TestLoadServerConfig(t *testing.T) {
+	env := make(map[string]string)
+	env["ADDRESS"] = "localhost:8080"
+	env["STORAGE_DRIVER"] = "mem"
+	env["FILE_STORAGE_PATH"] = "store.json"
+	env["STORE_INTERVAL"] = "300"
+	env["RESTORE_FLAG"] = "true"
+	env["DATABASE_DSN"] = ""
+
 	tests := []struct {
 		name string
+		env  map[string]string
 		want ServerConfig
 	}{
 		{
@@ -21,48 +30,31 @@ func TestLoadServerConfig(t *testing.T) {
 				RestoreFlag:   true,
 				SyncMode:      false,
 			},
+			env: env,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Создаем временный файл с нужными настройками
-			tmpfile, err := os.CreateTemp("", "test_server_config_*.env")
-			if err != nil {
-				t.Fatalf("Failed to create temp file: %v", err)
+			// Сбрасываем флаги перед каждым тестом
+			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+			flag.CommandLine.SetOutput(nil)
+
+			for key, value := range tt.env {
+				os.Setenv(key, value)
 			}
-			defer os.Remove(tmpfile.Name()) // Удаляем файл после выполнения теста
-
-			// Записываем нужные настройки в файл
-			configContent := `
-ADDRESS=localhost:8080
-STORAGE_DRIVER=mem
-STORE_INTERVAL=300
-FILE_STORAGE_PATH=store.json
-RESTORE_FLAG=true
-`
-			if _, err := tmpfile.Write([]byte(configContent)); err != nil {
-				t.Fatalf("Failed to write to temp file: %v", err)
-			}
-
-			// Закрываем файл, чтобы он был доступен для чтения
-			if err := tmpfile.Close(); err != nil {
-				t.Fatalf("Failed to close temp file: %v", err)
-			}
-
-			// Сохраняем текущее значение переменной окружения
-			originalEnv := os.Getenv("CONFIG_PATH")
-			defer os.Setenv("CONFIG_PATH", originalEnv) // Восстанавливаем оригинальное значение после теста
-
-			// Устанавливаем путь к временному файлу в переменную окружения
-			os.Setenv("CONFIG_PATH", tmpfile.Name())
 
 			// Вызываем функцию LoadServerConfig
 			got := LoadServerConfig()
 
 			// Проверяем, что настройки загружены корректно
-			if !reflect.DeepEqual(got, tt.want) {
+			if got != tt.want {
 				t.Errorf("LoadServerConfig() = %v, want %v", got, tt.want)
+			}
+
+			// Очищаем переменные окружения после теста
+			for key := range tt.env {
+				os.Unsetenv(key)
 			}
 		})
 	}
