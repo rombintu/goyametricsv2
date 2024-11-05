@@ -1,3 +1,4 @@
+// Package config AgentConfig
 package config
 
 import (
@@ -6,20 +7,18 @@ import (
 	"testing"
 )
 
-func TestLoadServerConfig(t *testing.T) {
+func TestLoadAgentConfig(t *testing.T) {
 	tests := []struct {
 		name string
-		want ServerConfig
+		want AgentConfig
 	}{
 		{
-			name: "try_simple_load_server_config",
-			want: ServerConfig{
-				Listen:        "localhost:8080",
-				StorageDriver: "mem",
-				StoreInterval: 300,
-				StoragePath:   "store.json",
-				RestoreFlag:   true,
-				SyncMode:      false,
+			name: "try_simple_load_agent_config",
+			want: AgentConfig{
+				Address:        "localhost:8080",
+				PollInterval:   10,
+				ReportInterval: 2,
+				RateLimit:      0,
 			},
 		},
 	}
@@ -27,20 +26,14 @@ func TestLoadServerConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Создаем временный файл с нужными настройками
-			tmpfile, err := os.CreateTemp("", "test_server_config_*.env")
+			tmpfile, err := os.CreateTemp("", "test_agent_config_*.env")
 			if err != nil {
 				t.Fatalf("Failed to create temp file: %v", err)
 			}
 			defer os.Remove(tmpfile.Name()) // Удаляем файл после выполнения теста
 
 			// Записываем нужные настройки в файл
-			configContent := `
-ADDRESS=localhost:8080
-STORAGE_DRIVER=mem
-STORE_INTERVAL=300
-FILE_STORAGE_PATH=store.json
-RESTORE_FLAG=true
-`
+			configContent := ``
 			if _, err := tmpfile.Write([]byte(configContent)); err != nil {
 				t.Fatalf("Failed to write to temp file: %v", err)
 			}
@@ -57,12 +50,12 @@ RESTORE_FLAG=true
 			// Устанавливаем путь к временному файлу в переменную окружения
 			os.Setenv("CONFIG_PATH", tmpfile.Name())
 
-			// Вызываем функцию LoadServerConfig
-			got := LoadServerConfig()
+			// Вызываем функцию LoadAgentConfig
+			got := LoadAgentConfig()
 
 			// Проверяем, что настройки загружены корректно
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("LoadServerConfig() = %v, want %v", got, tt.want)
+				t.Errorf("LoadAgentConfig() = %v, want %v", got, tt.want)
 			}
 		})
 	}
