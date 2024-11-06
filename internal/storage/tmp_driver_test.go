@@ -553,3 +553,26 @@ func Test_tmpDriver_Open(t *testing.T) {
 		})
 	}
 }
+
+func TestNewTmpDriver(t *testing.T) {
+	type args struct {
+		storepath string
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			name: "create_new_tmp_driver",
+			args: args{storepath: "mem"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NewTmpDriver(tt.args.storepath)
+			if got.storepath != tt.args.storepath {
+				t.Error("error create new driver tmp")
+			}
+		})
+	}
+}
