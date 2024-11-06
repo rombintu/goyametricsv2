@@ -45,5 +45,6 @@ create_table_metrics.sql
 *.sql
 
 *session.sql
-
+cmd/staticlint/staticlint
+bin
 !profiles/*cover.out

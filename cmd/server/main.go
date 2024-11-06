@@ -13,6 +13,12 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 // main is the entry point of the application.
 // It initializes the server, configures it, and starts the necessary workers.
 // The application listens for termination signals to gracefully shut down.
@@ -34,6 +40,8 @@ func main() {
 
 	// Start the server in a separate goroutine
 	go server.Run()
+
+	logger.OnStartUp(buildVersion, buildDate, buildCommit)
 
 	// Create a channel to signal the completion of the application
 	done := make(chan struct{})

@@ -2,6 +2,8 @@
 package logger
 
 import (
+	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -86,4 +88,21 @@ func RequestLogger(next echo.HandlerFunc) echo.HandlerFunc {
 		)
 		return err
 	}
+}
+
+func ifEmptyOpt(opt string) string {
+	if opt == "" {
+		return "N/A"
+	}
+	return opt
+}
+
+func OnStartUp(bversion, bdate, bcommit string) {
+	bversion = ifEmptyOpt(bversion)
+	bdate = ifEmptyOpt(bdate)
+	bcommit = ifEmptyOpt(bcommit)
+
+	slog.Info(fmt.Sprintf("Build version: %s", bversion))
+	slog.Info(fmt.Sprintf("Build date: %s", bdate))
+	slog.Info(fmt.Sprintf("Build commit: %s", bcommit))
 }
