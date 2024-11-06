@@ -515,3 +515,41 @@ func Test_tmpDriver_Update(t *testing.T) {
 		})
 	}
 }
+
+func Test_tmpDriver_Open(t *testing.T) {
+	cmap := make(Counters)
+	gmap := make(Gauges)
+	data := Data{
+		Counters: cmap,
+		Gauges:   gmap,
+	}
+	type fields struct {
+		data      *Data
+		storepath string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		wantErr bool
+	}{
+		{
+			name: "open_tmp_driver",
+			fields: fields{
+				data:      &data,
+				storepath: "store-test.json",
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &tmpDriver{
+				data:      tt.fields.data,
+				storepath: tt.fields.storepath,
+			}
+			if err := d.Open(); (err != nil) != tt.wantErr {
+				t.Errorf("tmpDriver.Open() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

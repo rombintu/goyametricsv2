@@ -21,3 +21,22 @@ tasks:
   cover:
     cmds:
       - go test ./... -coverprofile profiles/cover.out && go tool cover -func=profiles/cover.out
+
+  prepush:
+    cmds:
+      - go vet -vettool=./statictest ./...
+      - go run cmd/staticlint/main.go  ./...
+      - go test -race ./...
+      - go test -bench=. ./...
+
+  cover-gen-svg:
+    cmds:
+      - |
+        COVERAGE=$(go tool cover -func=profiles/cover.out | grep total | awk '{print $3}' | sed 's/%//')
+        cat <<EOF > profiles/coverage.svg
+        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="20">
+          <rect width="100" height="20" fill="#555"/>
+          <rect width="$COVERAGE" height="20" fill="#4c1"/>
+          <text x="5" y="15" fill="#fff" font-family="Arial, sans-serif" font-size="12">$COVERAGE%</text>
+        </svg>
+        EOF

@@ -46,4 +46,4 @@ create_table_metrics.sql
 
 *session.sql
 
-!profiles/cover.out
+!profiles/*cover.out
