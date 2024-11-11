@@ -2,6 +2,7 @@
 package config
 
 import (
+	"flag"
 	"os"
 	"strconv"
 )
@@ -15,10 +16,10 @@ const (
 	defaultStoragePath   = "store.json"
 	defaultRestoreFlag   = true
 	// Agent
-	defaultServerURL      = defaultListen
-	defaultReportInterval = 2
-	defaultPollInterval   = 10
-	defaultRateLimit      = 0
+	defaultServerURL            = defaultListen
+	defaultReportInterval int64 = 2
+	defaultPollInterval   int64 = 10
+	defaultRateLimit      int64 = 0
 
 	// Server
 	hintListen        = "Server address"
@@ -39,14 +40,6 @@ const (
 	hintPollInterval   = "Poll interval"
 	hintRateLimit      = "Rate limit. 0 - unlimited"
 )
-
-type DatabaseConfig struct {
-	User string `yaml:"db_user"`
-	Pass string `yaml:"db_pass"`
-	Host string `yaml:"db_host" env-default:"localhost"`
-	Port string `yaml:"db_port" env-default:"5432"`
-	Name string `yaml:"db_name" env-default:"metrics"`
-}
 
 // tryLoadFromEnv attempts to load a configuration value from an environment variable.
 // If the environment variable is not set, it returns the value from the flags.
@@ -110,4 +103,108 @@ func tryLoadFromEnvBool(key string, fromFlags bool) bool {
 			return parseBool
 		}
 	}
+}
+
+type PriorityMap map[int]string // Неизменяемый список приоритетов
+
+const (
+	filePriority = "file"
+	flagPriority = "flag"
+	envPriority  = "env"
+)
+
+const (
+	stringType = "string"
+	int64Type  = "int64"
+	boolType   = "bool"
+)
+
+type ConfigUnit struct {
+	Code        string
+	KeyFlag     string
+	KeyFile     string
+	KeyEnv      string
+	Description string
+	WantType    string
+	Value       any
+	Default     any
+	Defined     bool
+}
+
+func (cu *ConfigUnit) Set(v any) {
+	if v != nil {
+		cu.Value = v
+		cu.Defined = true
+		return
+	}
+	cu.Value = cu.Default
+}
+
+// Дженерик
+func Get[T any](cu ConfigUnit) T {
+	return cu.Value.(T)
+}
+
+type ConfigCollector struct {
+	cursor      int
+	priorities  PriorityMap
+	ConfigUnits []ConfigUnit
+}
+
+func (cl *ConfigCollector) Search(code string) ConfigUnit {
+	for {
+		unit, ok := cl.Next()
+		if unit.Code == code {
+			return unit
+		}
+		if !ok {
+			break
+		}
+	}
+	return ConfigUnit{}
+}
+
+func NewConfigCollector(priorities PriorityMap, cUnits ...ConfigUnit) *ConfigCollector {
+	cl := new(ConfigCollector)
+	cl.priorities = priorities
+	// ... Start collect
+	for _, unit := range cUnits {
+		if !unit.Defined {
+			for _, pr := range priorities {
+				switch pr {
+				// case filePriority:
+				case flagPriority:
+					switch unit.WantType {
+					case int64Type:
+						val := flag.Int64(unit.KeyFlag, unit.Default.(int64), unit.Description)
+						unit.Set(*val)
+					case stringType:
+						val := flag.String(unit.KeyFlag, unit.Default.(string), unit.Description)
+						unit.Set(*val)
+					case boolType:
+						val := flag.Bool(unit.KeyFlag, unit.Default.(bool), unit.Description)
+						unit.Set(*val)
+
+					}
+				case envPriority:
+					envValue, ok := os.LookupEnv(unit.KeyEnv)
+					if ok {
+						unit.Set(envValue)
+					}
+				}
+			}
+		}
+	}
+	flag.Parse()
+
+	// ... End collect
+	cl.ConfigUnits = append(cl.ConfigUnits, cUnits...)
+	return cl
+}
+
+func (cl *ConfigCollector) Next() (ConfigUnit, bool) {
+	if cl.cursor <= len(cl.ConfigUnits) {
+		cl.cursor++
+	}
+	return cl.ConfigUnits[cl.cursor-1], cl.cursor < len(cl.ConfigUnits)
 }
