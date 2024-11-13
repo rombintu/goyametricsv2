@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+func teardown(envlist map[string]string) {
+	for key, value := range envlist {
+		os.Setenv(key, value)
+	}
+}
+
 func TestLoadServerConfig(t *testing.T) {
 	env := make(map[string]string)
 	env["ADDRESS"] = "localhost:8080"
@@ -36,13 +42,10 @@ func TestLoadServerConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			defer teardown(tt.env)
 			// Сбрасываем флаги перед каждым тестом
 			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 			flag.CommandLine.SetOutput(nil)
-
-			for key, value := range tt.env {
-				os.Setenv(key, value)
-			}
 
 			// Вызываем функцию LoadServerConfig
 			got := LoadServerConfig()

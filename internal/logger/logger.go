@@ -3,11 +3,11 @@ package logger
 
 import (
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -18,8 +18,17 @@ const (
 	ProdMode = "prod"
 )
 
+type Logger interface {
+	Debug(msg string, fields ...zapcore.Field)
+	Error(msg string, fields ...zapcore.Field)
+	Fatal(msg string, fields ...zapcore.Field)
+	Info(msg string, fields ...zapcore.Field)
+	Level() zapcore.Level
+	Warn(msg string, fields ...zapcore.Field)
+}
+
 // Взял пример из урока, реализация логгера по паттерну Singleton
-var Log *zap.Logger = zap.NewNop()
+var Log Logger = zap.NewNop()
 
 // Initialize инициализирует синглтон логера с необходимым уровнем логирования.
 func Initialize(mode string) (err error) {
@@ -102,7 +111,7 @@ func OnStartUp(bversion, bdate, bcommit string) {
 	bdate = ifEmptyOpt(bdate)
 	bcommit = ifEmptyOpt(bcommit)
 
-	slog.Info(fmt.Sprintf("Build version: %s", bversion))
-	slog.Info(fmt.Sprintf("Build date: %s", bdate))
-	slog.Info(fmt.Sprintf("Build commit: %s", bcommit))
+	Log.Info(fmt.Sprintf("Build version: %s", bversion))
+	Log.Info(fmt.Sprintf("Build date: %s", bdate))
+	Log.Info(fmt.Sprintf("Build commit: %s", bcommit))
 }

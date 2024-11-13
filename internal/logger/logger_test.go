@@ -1,9 +1,11 @@
 package logger
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 )
 
@@ -35,11 +37,21 @@ func TestInitialize(t *testing.T) {
 	}
 }
 
+type MockLogger struct {
+	*zap.Logger
+	Messages []string
+}
+
+func (m *MockLogger) Info(msg string, fields ...zap.Field) {
+	m.Messages = append(m.Messages, msg)
+}
+
 func TestOnStartUp(t *testing.T) {
 	type args struct {
 		bversion string
 		bdate    string
 		bcommit  string
+		expected []string
 	}
 	tests := []struct {
 		name string
@@ -51,6 +63,11 @@ func TestOnStartUp(t *testing.T) {
 				bversion: "v0.0.1",
 				bdate:    time.Now().Format(time.RFC3339),
 				bcommit:  "g23g321111",
+				expected: []string{
+					"Build version: v0.0.1",
+					fmt.Sprintf("Build date: %s", time.Now().Format(time.RFC3339)),
+					"Build commit: g23g321111",
+				},
 			},
 		},
 		{
@@ -59,6 +76,11 @@ func TestOnStartUp(t *testing.T) {
 				bversion: "",
 				bdate:    time.Now().Format(time.RFC3339),
 				bcommit:  "",
+				expected: []string{
+					"Build version: N/A",
+					fmt.Sprintf("Build date: %s", time.Now().Format(time.RFC3339)),
+					"Build commit: N/A",
+				},
 			},
 		},
 	}
@@ -67,7 +89,10 @@ func TestOnStartUp(t *testing.T) {
 			t.Errorf("Initialize() error = %v", err)
 		}
 		t.Run(tt.name, func(t *testing.T) {
+			mockLogger := &MockLogger{}
+			Log = mockLogger
 			OnStartUp(tt.args.bversion, tt.args.bdate, tt.args.bcommit)
+			assert.Equal(t, tt.args.expected, mockLogger.Messages)
 		})
 	}
 }
