@@ -38,6 +38,12 @@ const (
 	hintReportInterval = "Report interval"
 	hintPollInterval   = "Poll interval"
 	hintRateLimit      = "Rate limit. 0 - unlimited"
+
+	// Inter 21
+	defaultPrivateKeyFile = ""
+	defaultPubkeyFile     = ""
+	hintPrivateKeyFile    = "Path to private key of server"
+	hintPubkeyFile        = "Path to public key of server"
 )
 
 type DatabaseConfig struct {

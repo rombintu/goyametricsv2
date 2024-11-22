@@ -59,6 +59,7 @@ func Initialize(mode string) (err error) {
 	defer zl.Sync()
 	// устанавливаем синглтон
 	Log = zl
+
 	return nil
 }
 

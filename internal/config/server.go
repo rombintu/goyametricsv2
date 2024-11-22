@@ -19,6 +19,8 @@ type ServerConfig struct {
 
 	// Ключ для подписи
 	HashKey string
+	// Путь до файла с приватным ключом
+	PrivateKeyFile string
 }
 
 // Try load Server Config from flags
@@ -31,7 +33,7 @@ func loadServerConfigFromFlags() ServerConfig {
 	f := flag.String("f", defaultStoragePath, hintStoragePath)
 	r := flag.Bool("r", defaultRestoreFlag, hintRestoreFlag)
 	d := flag.String("d", "", hintStorageURL)
-
+	privateKey := flag.String("crypto-key", defaultPrivateKeyFile, hintPrivateKeyFile)
 	// New
 	k := flag.String("k", defaultHashKey, hintHashKey)
 
@@ -51,6 +53,8 @@ func loadServerConfigFromFlags() ServerConfig {
 	// increment 14
 	config.HashKey = *k
 
+	// increment 21
+	config.PrivateKeyFile = *privateKey
 	return config
 }
 
@@ -79,6 +83,9 @@ func LoadServerConfig() ServerConfig {
 	} else if (config.StoragePath != "") && (config.StoragePath != defaultStoragePath) {
 		config.StorageDriver = storage.FileDriver
 	}
+
+	// increment 21
+	config.PrivateKeyFile = tryLoadFromEnv("CRYPTO_KEY", config.PrivateKeyFile)
 
 	return config
 }

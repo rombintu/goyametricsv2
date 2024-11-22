@@ -9,6 +9,7 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/mycrypt"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"github.com/rombintu/goyametricsv2/lib/myhash"
 	"go.uber.org/zap"
@@ -45,6 +46,7 @@ func (s *Server) Configure() {
 	s.ConfigureRouter()
 	s.ConfigureStorage()
 	s.ConfigurePprof()
+	s.ConfigureCrypto()
 }
 
 // Run starts the server by listening on the configured address and handling incoming requests.
@@ -110,6 +112,19 @@ func (s *Server) ConfigureMiddlewares() {
 // This allows for profiling the server's performance.
 func (s *Server) ConfigurePprof() {
 	pprof.Register(s.router)
+}
+
+func (s *Server) ConfigureCrypto() {
+	// Если путь установлен
+	if s.config.PrivateKeyFile != "" {
+		// Если ключ по пути неверный
+		if !mycrypt.ValidPrivateKey(s.config.PrivateKeyFile) {
+			// Делаем новый ключ по этому пути
+			if err := mycrypt.GenPrivKeyAndCertPEM(s.config.PrivateKeyFile); err != nil {
+				logger.Log.Error(err.Error())
+			}
+		}
+	}
 }
 
 // syncStorage synchronizes the storage by saving any pending changes.

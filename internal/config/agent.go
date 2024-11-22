@@ -12,6 +12,8 @@ type AgentConfig struct {
 	EnvMode        string `yaml:"EnvMode" env-default:"dev"`
 	HashKey        string
 	RateLimit      int64
+	// Путь до файла с публичным ключом.
+	PublicKeyFile string
 }
 
 // Try load Server Config from flags
@@ -22,6 +24,7 @@ func loadAgentConfigFromFlags() AgentConfig {
 	p := flag.Int64("p", defaultPollInterval, hintPollInterval)
 	k := flag.String("k", defaultHashKey, hintHashKey)
 	l := flag.Int64("l", defaultRateLimit, hintRateLimit)
+	pubkey := flag.String("crypto-key", defaultPubkeyFile, hintPubkeyFile)
 	flag.Parse()
 
 	config.Address = *a
@@ -29,6 +32,8 @@ func loadAgentConfigFromFlags() AgentConfig {
 	config.PollInterval = *p
 	config.HashKey = *k
 	config.RateLimit = *l
+
+	config.PublicKeyFile = *pubkey
 
 	return config
 }
@@ -45,5 +50,7 @@ func LoadAgentConfig() AgentConfig {
 
 	config.HashKey = tryLoadFromEnv("KEY", fromFlags.HashKey)
 	config.RateLimit = tryLoadFromEnvInt64("RATE_LIMIT", fromFlags.RateLimit)
+
+	config.PublicKeyFile = tryLoadFromEnv("CRYPTO_KEY", fromFlags.PublicKeyFile)
 	return config
 }
