@@ -1,23 +1,54 @@
 version: '3'
+
 tasks:
-  test:
-    cmds:
-      - go vet -vettool=./statictest ./... > tests.log
-      - go build -o cmd/server/server cmd/server/main.go >> tests.log
-      - go build -o cmd/agent/agent cmd/agent/main.go >> tests.log
-      - ./metricstest -test.v -agent-binary-path=./cmd/agent/agent -binary-path=./cmd/server/server -server-port=8080 -source-path=./ -file-storage-path=./store-test.json -database-dsn="host=localhost user=admin password=admin dbname=metrics sslmode=disable" >> tests.log
   build-server:
     cmds:
-      - go build -o cmd/server/server cmd/server/main.go
+      - |
+        BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+        COMMIT=$(git rev-parse HEAD)
+        COUNT_COMMIT=$(git rev-list --count HEAD)
+        DATE=$(date +"%Y%m%d%H%M%S")
+        go build -ldflags "-X main.buildVersion=v0.${BRANCH_NAME}.${COUNT_COMMIT} -X main.buildDate=${DATE} -X main.buildCommit=${COMMIT}" -o cmd/server/server cmd/server/main.go
   build-agent:
     cmds:
-      - go build -o cmd/agent/agent cmd/agent/main.go
+      - |
+        BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+        COMMIT=$(git rev-parse HEAD)
+        COUNT_COMMIT=$(git rev-list --count HEAD)
+        DATE=$(date +"%Y%m%d%H%M%S")
+        go build -ldflags "-X main.buildVersion=v0.${BRANCH_NAME}.${COUNT_COMMIT} -X main.buildDate=${DATE} -X main.buildCommit=${COMMIT}" -o cmd/agent/agent cmd/agent/main.go
   statictest:
     cmds:
       - go vet -vettool=./statictest ./...
+  test:
+    cmds:
+      - task: statictest
+      - task: build-server
+      - task: build-agent
+      - ./metricstest -test.v -agent-binary-path=./cmd/agent/agent -binary-path=./cmd/server/server -server-port=8080 -source-path=./ -file-storage-path=./store-test.json -database-dsn="host=localhost user=admin password=admin dbname=metrics sslmode=disable" -key "secret-key" >> tests.log
   gomock:
     cmds:
       - mockgen -destination=./internal/mocks/mock_storage.go -package=mocks github.com/rombintu/goyametricsv2/internal/storage Storage
   cover:
     cmds:
       - go test ./... -coverprofile profiles/cover.out && go tool cover -func=profiles/cover.out
+      - task: cover-gen-svg
+
+  prepush:
+    cmds:
+      - task: statictest
+      - go run cmd/staticlint/main.go  ./...
+      - go test -race ./...
+      - go test -bench=. ./...
+
+  cover-gen-svg:
+    cmds:
+      - |
+        COVERAGE=$(go tool cover -func=profiles/cover.out | grep total | awk '{print $3}' | sed 's/%//')
+        cat <<EOF > profiles/coverage.svg
+        <svg xmlns="http://www.w3.org/2000/svg" width="100" height="20">
+          <rect width="100" height="20" fill="#555"/>
+          <rect width="$COVERAGE" height="20" fill="#4c1"/>
+          <text x="5" y="15" fill="#fff" font-family="Arial, sans-serif" font-size="12">$COVERAGE%</text>
+        </svg>
+        EOF

@@ -71,3 +71,40 @@ func TestAgent_loadPSUtilsMetrics(t *testing.T) {
 		})
 	}
 }
+
+func TestAgent_postRequestJSON(t *testing.T) {
+	type args struct {
+		url  string
+		data any
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name:    "failed_post_request_json",
+			args:    args{url: "localhost:8080", data: Data{}},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := NewAgent(config.AgentConfig{})
+			if err := a.postRequestJSON(tt.args.url, tt.args.data); (err != nil) != tt.wantErr {
+				t.Errorf("Agent.postRequestJSON() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestAgent_incPollCount(t *testing.T) {
+	t.Run("PollCountIncrement", func(t *testing.T) {
+		a := NewAgent(config.AgentConfig{})
+		a.incPollCount()
+		if a.pollCount != 1 {
+			t.Error("pollCount error increment")
+		}
+	})
+
+}

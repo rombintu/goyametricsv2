@@ -1,3 +1,4 @@
+// Package server internal server Handlers
 package server
 
 import (

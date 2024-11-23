@@ -124,7 +124,8 @@ func TestMetrics_SetValueOrDelta(t *testing.T) {
 				Delta: ptrhelper.Int64Ptr(1),
 				Value: ptrhelper.Float64Ptr(-1),
 			},
-			wantErr: true,
+			args:    args{s: "1"},
+			wantErr: false,
 		},
 		{
 			name: "set_with_plus",
@@ -134,6 +135,29 @@ func TestMetrics_SetValueOrDelta(t *testing.T) {
 				Delta: ptrhelper.Int64Ptr(1),
 				Value: ptrhelper.Float64Ptr(1),
 			},
+			args:    args{s: "1"},
+			wantErr: false,
+		},
+		{
+			name: "set_value_without_err",
+			fields: fields{
+				ID:    "3",
+				MType: storage.CounterType,
+				Delta: ptrhelper.Int64Ptr(1),
+				Value: ptrhelper.Float64Ptr(1),
+			},
+			args:    args{s: "1"},
+			wantErr: false,
+		},
+		{
+			name: "set_value_with_err",
+			fields: fields{
+				ID:    "4",
+				MType: storage.CounterType,
+				Delta: ptrhelper.Int64Ptr(1),
+				Value: ptrhelper.Float64Ptr(1),
+			},
+			args:    args{s: "ggg"},
 			wantErr: true,
 		},
 	}

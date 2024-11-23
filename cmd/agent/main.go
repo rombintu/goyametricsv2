@@ -13,6 +13,12 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 // main is the entry point of the application.
 // It initializes the agent, configures it, and starts the necessary workers.
 // The application listens for termination signals to gracefully shut down.
@@ -34,6 +40,7 @@ func main() {
 	// Initialize the logger with the environment mode from the configuration
 	logger.Initialize(conf.EnvMode)
 	logger.Log.Info("Agent starting", zap.String("address", conf.Address))
+	logger.OnStartUp(buildVersion, buildDate, buildCommit)
 
 	// Add and start the poll worker
 	wg.Add(1)

@@ -468,3 +468,111 @@ func Test_tmpDriver_UpdateAll(t *testing.T) {
 		})
 	}
 }
+
+func Test_tmpDriver_Update(t *testing.T) {
+	data := &Data{
+		Counters: make(Counters),
+		Gauges:   make(Gauges),
+	}
+	type fields struct {
+		data      *Data
+		storepath string
+	}
+	type args struct {
+		mtype  string
+		mname  string
+		mvalue string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "update_some_value",
+			fields: fields{
+				data:      data,
+				storepath: "test.json",
+			},
+			args: args{
+				mtype:  CounterType,
+				mname:  "testing1",
+				mvalue: "1",
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &tmpDriver{
+				data:      tt.fields.data,
+				storepath: tt.fields.storepath,
+			}
+			if err := d.Update(tt.args.mtype, tt.args.mname, tt.args.mvalue); (err != nil) != tt.wantErr {
+				t.Errorf("tmpDriver.Update() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_tmpDriver_Open(t *testing.T) {
+	cmap := make(Counters)
+	gmap := make(Gauges)
+	data := Data{
+		Counters: cmap,
+		Gauges:   gmap,
+	}
+	type fields struct {
+		data      *Data
+		storepath string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		wantErr bool
+	}{
+		{
+			name: "open_tmp_driver",
+			fields: fields{
+				data:      &data,
+				storepath: "store-test.json",
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &tmpDriver{
+				data:      tt.fields.data,
+				storepath: tt.fields.storepath,
+			}
+			if err := d.Open(); (err != nil) != tt.wantErr {
+				t.Errorf("tmpDriver.Open() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestNewTmpDriver(t *testing.T) {
+	type args struct {
+		storepath string
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			name: "create_new_tmp_driver",
+			args: args{storepath: "mem"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NewTmpDriver(tt.args.storepath)
+			if got.storepath != tt.args.storepath {
+				t.Error("error create new driver tmp")
+			}
+		})
+	}
+}

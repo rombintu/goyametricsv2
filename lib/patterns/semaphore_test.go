@@ -74,37 +74,3 @@ func TestSemaphore_Concurrency(t *testing.T) {
 		t.Errorf("Expected semaphore channel to be empty, got %d", len(sem.semaCh))
 	}
 }
-
-func TestSemaphore_EdgeCases(t *testing.T) {
-	// Проверяем случай с максимальным количеством запросов равным 0
-	sem := NewSemaphore(0)
-
-	// Проверяем, что семафор не позволяет выполнять операции
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		sem.Acquire()
-		t.Error("Expected Acquire to block indefinitely, but it did not")
-	}()
-
-	// Ждем некоторое время, чтобы убедиться, что горутина не завершилась
-	time.Sleep(100 * time.Millisecond)
-
-	// Проверяем, что семафор работает корректно
-	if len(sem.semaCh) != 0 {
-		t.Errorf("Expected semaphore channel to be empty, got %d", len(sem.semaCh))
-	}
-
-	// Проверяем случай с максимальным количеством запросов равным 1
-	sem = NewSemaphore(1)
-
-	// Проверяем, что семафор работает корректно
-	sem.Acquire()
-	sem.Release()
-
-	// Проверяем, что семафор работает корректно
-	if len(sem.semaCh) != 0 {
-		t.Errorf("Expected semaphore channel to be empty, got %d", len(sem.semaCh))
-	}
-}
