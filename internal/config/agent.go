@@ -14,6 +14,7 @@ type AgentConfig struct {
 	RateLimit      int64
 	// Путь до файла с публичным ключом.
 	PublicKeyFile string
+	SecureMode    bool
 }
 
 // Try load Server Config from flags

@@ -31,6 +31,11 @@ func main() {
 		conf.StoragePath = conf.StorageURL
 	}
 
+	// inc 21
+	if conf.PrivateKeyFile != "" {
+		conf.SecureMode = true
+	}
+
 	// Create a new storage instance based on the configuration
 	storage := storage.NewStorage(conf.StorageDriver, conf.StoragePath)
 

@@ -2,6 +2,7 @@
 package server
 
 import (
+	"crypto/rsa"
 	"net/http"
 
 	"github.com/labstack/echo-contrib/pprof"
@@ -15,11 +16,16 @@ import (
 	"go.uber.org/zap"
 )
 
+type InternalStorage struct {
+	privateKey *rsa.PrivateKey
+}
+
 // Server represents the main server struct that holds the configuration, storage, and router.
 type Server struct {
-	config  config.ServerConfig // Configuration for the server
-	storage storage.Storage     // Storage interface for managing data
-	router  *echo.Echo          // Echo router for handling HTTP requests
+	config   config.ServerConfig // Configuration for the server
+	storage  storage.Storage     // Storage interface for managing data
+	router   *echo.Echo          // Echo router for handling HTTP requests
+	iStorage InternalStorage
 }
 
 // NewServer creates a new instance of the Server with the provided storage and configuration.
@@ -99,6 +105,12 @@ func (s *Server) ConfigureRouter() {
 // It initializes the logger, adds request logging, gzip compression, and hash checking middlewares.
 func (s *Server) ConfigureMiddlewares() {
 	logger.Initialize(s.config.EnvMode)
+
+	// iter 21
+	if s.config.SecureMode {
+		s.router.Use(mycrypt.EncryptMiddleware(s.iStorage.privateKey))
+	}
+
 	s.router.Use(logger.RequestLogger)
 
 	// Gzip middleware for compression
@@ -106,6 +118,7 @@ func (s *Server) ConfigureMiddlewares() {
 
 	// Hash check middleware for verifying request integrity
 	s.router.Use(myhash.HashCheckMiddleware(s.config.HashKey))
+
 }
 
 // ConfigurePprof registers the pprof handlers with the server's router.
@@ -116,14 +129,25 @@ func (s *Server) ConfigurePprof() {
 
 func (s *Server) ConfigureCrypto() {
 	// Если путь установлен
-	if s.config.PrivateKeyFile != "" {
+	if s.config.SecureMode {
 		// Если ключ по пути неверный
 		if !mycrypt.ValidPrivateKey(s.config.PrivateKeyFile) {
-			// Делаем новый ключ по этому пути
-			if err := mycrypt.GenPrivKeyAndCertPEM(s.config.PrivateKeyFile); err != nil {
-				logger.Log.Error(err.Error())
+			var err error
+			var privateKey *rsa.PrivateKey
+			privateKey, err = mycrypt.LoadPrivateKey(s.config.PrivateKeyFile)
+			if err != nil {
+				logger.Log.Debug("Private key is not valid. Generating new private and public keys...")
+				// Делаем новый ключ по этому пути
+				privateKey, err = mycrypt.GenRSAKeyPair(s.config.PrivateKeyFile)
+				if err != nil {
+					logger.Log.Error(err.Error())
+				}
 			}
+
+			s.iStorage.privateKey = privateKey
 		}
+	} else {
+		logger.Log.Debug("Private key file not set. Skipping...")
 	}
 }
 

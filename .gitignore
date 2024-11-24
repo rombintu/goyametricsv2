@@ -48,3 +48,8 @@ create_table_metrics.sql
 cmd/staticlint/staticlint
 bin
 !profiles/*cover.out
+
+// crypt
+*.key
+*.cert
+*priv*

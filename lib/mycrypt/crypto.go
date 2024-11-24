@@ -5,114 +5,190 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/pem"
-	"log"
-	"math/big"
-	"net"
+	"io"
+	"net/http"
 	"os"
-	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/lib/common"
+	"go.uber.org/zap"
 )
 
 func ValidPrivateKey(filePath string) bool {
 	if !common.FileIsExists(filePath) {
-		logger.Log.Error("file not exists")
+		logger.Log.Debug("file not exists", zap.String("file", filePath))
 		return false
 	}
 
 	// Читаем содержимое файла
 	keyBytes, err := os.ReadFile(filePath)
 	if err != nil {
-		logger.Log.Error("error read file")
+		logger.Log.Debug("error read file", zap.String("file", filePath))
 		return false
 	}
 
 	// Декодируем PEM-блок
 	block, _ := pem.Decode(keyBytes)
 	if block == nil || block.Type != "RSA PRIVATE KEY" {
-		logger.Log.Error("error decode file")
+		logger.Log.Debug("error decode file", zap.String("file", filePath))
 		return false
 	}
 
 	// Парсим приватный ключ
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
-		logger.Log.Error("error parse private key")
+		logger.Log.Debug("error parse private key", zap.String("file", filePath))
 		return false
 	}
 
 	// Проверяем длину ключа
 	if privateKey.N.BitLen() != 4096 {
-		logger.Log.Error("error private key len != 4096")
+		logger.Log.Debug("error private key len != 4096", zap.String("file", filePath))
 		return false
 	}
 
 	// Проверка валидности ключа
 	if err := privateKey.Validate(); err != nil {
-		logger.Log.Error("invalid RSA private key")
+		logger.Log.Debug("invalid RSA private key", zap.String("file", filePath))
 		return false
 	}
 
 	return true
 }
 
-func GenPrivKeyAndCertPEM(filePath string) error {
-	cert := &x509.Certificate{
-		// указываем уникальный номер сертификата
-		SerialNumber: big.NewInt(1658),
-		// заполняем базовую информацию о владельце сертификата
-		Subject: pkix.Name{
-			Organization: []string{"Yandex.Praktikum"},
-			Country:      []string{"RU"},
-		},
-
-		IPAddresses: []net.IP{net.IPv4(0, 0, 0, 0), net.IPv6loopback},
-		// сертификат верен, начиная со времени создания
-		NotBefore: time.Now(),
-		// время жизни сертификата — 10 лет
-		NotAfter:     time.Now().AddDate(10, 0, 0),
-		SubjectKeyId: []byte{1, 2, 3, 4, 6},
-		// устанавливаем использование ключа для цифровой подписи,
-		// а также клиентской и серверной авторизации
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:    x509.KeyUsageDigitalSignature,
-	}
-
+func GenRSAKeyPair(filename string) (*rsa.PrivateKey, error) {
+	// Генерация приватного ключа
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		logger.Log.Error("error gen private key")
-		return err
+		return nil, err
 	}
 
-	// создаём сертификат x.509
-	certBytes, err := x509.CreateCertificate(rand.Reader, cert, cert, &privateKey.PublicKey, privateKey)
-	if err != nil {
-		log.Fatal(err)
+	// Публичный ключ из приватного
+	publicKey := &privateKey.PublicKey
+
+	if err := SavePrivateKey(filename, privateKey); err != nil {
+		return nil, err
+	}
+	if err := SavePublicKey(filename+".pub", publicKey); err != nil {
+		return nil, err
 	}
 
-	// кодируем сертификат и ключ в формате PEM, который
-	// используется для хранения и обмена криптографическими ключами
-	var certPEM bytes.Buffer
-	pem.Encode(&certPEM, &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: certBytes,
-	})
+	return privateKey, nil
+}
 
-	var privateKeyPEM bytes.Buffer
-	pem.Encode(&privateKeyPEM, &pem.Block{
+func SavePrivateKey(filename string, key *rsa.PrivateKey) error {
+	// Сериализация приватного ключа в PKCS#1, ASN.1 DER формат
+	keyBytes := x509.MarshalPKCS1PrivateKey(key)
+
+	// Создание PEM блока
+	block := &pem.Block{
 		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
-	})
-	if err := common.ReWriteFile(filePath, privateKeyPEM.Bytes()); err != nil {
-		logger.Log.Error("error rewrite private key file")
+		Bytes: keyBytes,
+	}
+
+	// Сохранение в файл
+	file, err := os.Create(filename)
+	if err != nil {
 		return err
 	}
-	if err := common.ReWriteFile(filePath+".cert", certPEM.Bytes()); err != nil {
-		logger.Log.Error("error rewrite certificate file")
+	defer file.Close()
+
+	return pem.Encode(file, block)
+}
+
+func SavePublicKey(filename string, key *rsa.PublicKey) error {
+	// Сериализация публичного ключа в PKIX, ASN.1 DER формат
+	keyBytes, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
 		return err
 	}
+
+	// Создание PEM блока
+	block := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: keyBytes,
+	}
+
+	// Сохранение в файл
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return pem.Encode(file, block)
+}
+
+func LoadPrivateKey(filename string) (*rsa.PrivateKey, error) {
+	privateKeyBytes, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(privateKeyBytes)
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return privateKey, nil
+}
+
+func LoadPublicKey(filename string) (*rsa.PublicKey, error) {
+	publicKeyBytes, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(publicKeyBytes)
+	publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return publicKey, nil
+}
+
+func EncryptMiddleware(privateKey *rsa.PrivateKey) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			// Дешифрование данных из запроса
+			if c.Request().Method == http.MethodPost || c.Request().Method == http.MethodPut {
+				body, err := io.ReadAll(c.Request().Body)
+				if err != nil {
+					return err
+				}
+				decryptedBytes, err := rsa.DecryptPKCS1v15(rand.Reader, privateKey, body)
+				if err != nil {
+					return err
+				}
+				c.Request().Body = io.NopCloser(bytes.NewReader(decryptedBytes))
+			}
+
+			// Передача управления следующему обработчику
+			if err := next(c); err != nil {
+				c.Error(err)
+			}
+
+			return nil
+		}
+	}
+}
+
+func EncryptWithPublicKey(pubKey *rsa.PublicKey, buff *bytes.Buffer) error {
+	// Чтение содержимого буфера
+	plaintext := buff.Bytes()
+
+	// Шифрование содержимого с помощью публичного ключа
+	ciphertext, err := rsa.EncryptPKCS1v15(rand.Reader, pubKey, plaintext)
+	if err != nil {
+		return err
+	}
+
+	// Очистка буфера и запись зашифрованного сообщения в буфер
+	buff.Reset()
+	_, err = buff.Write(ciphertext)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

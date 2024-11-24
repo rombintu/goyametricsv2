@@ -32,6 +32,9 @@ func main() {
 
 	// Load the agent configuration
 	conf := config.LoadAgentConfig()
+	if conf.PublicKeyFile != "" {
+		conf.SecureMode = true
+	}
 
 	// Create a new agent instance with the loaded configuration
 	a := agent.NewAgent(conf)

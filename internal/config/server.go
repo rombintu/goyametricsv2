@@ -21,6 +21,7 @@ type ServerConfig struct {
 	HashKey string
 	// Путь до файла с приватным ключом
 	PrivateKeyFile string
+	SecureMode     bool
 }
 
 // Try load Server Config from flags
@@ -33,9 +34,9 @@ func loadServerConfigFromFlags() ServerConfig {
 	f := flag.String("f", defaultStoragePath, hintStoragePath)
 	r := flag.Bool("r", defaultRestoreFlag, hintRestoreFlag)
 	d := flag.String("d", "", hintStorageURL)
-	privateKey := flag.String("crypto-key", defaultPrivateKeyFile, hintPrivateKeyFile)
 	// New
 	k := flag.String("k", defaultHashKey, hintHashKey)
+	privateKeyFile := flag.String("crypto-key", defaultPrivateKeyFile, hintPrivateKeyFile)
 
 	flag.Parse()
 
@@ -54,7 +55,7 @@ func loadServerConfigFromFlags() ServerConfig {
 	config.HashKey = *k
 
 	// increment 21
-	config.PrivateKeyFile = *privateKey
+	config.PrivateKeyFile = *privateKeyFile
 	return config
 }
 
@@ -85,7 +86,7 @@ func LoadServerConfig() ServerConfig {
 	}
 
 	// increment 21
-	config.PrivateKeyFile = tryLoadFromEnv("CRYPTO_KEY", config.PrivateKeyFile)
+	config.PrivateKeyFile = tryLoadFromEnv("CRYPTO_KEY", fromFlags.PrivateKeyFile)
 
 	return config
 }
