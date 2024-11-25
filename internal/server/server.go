@@ -22,10 +22,10 @@ type InternalStorage struct {
 
 // Server represents the main server struct that holds the configuration, storage, and router.
 type Server struct {
-	config   config.ServerConfig // Configuration for the server
-	storage  storage.Storage     // Storage interface for managing data
-	router   *echo.Echo          // Echo router for handling HTTP requests
-	iStorage InternalStorage
+	config          config.ServerConfig // Configuration for the server
+	storage         storage.Storage     // Storage interface for managing data
+	router          *echo.Echo          // Echo router for handling HTTP requests
+	internalStorage InternalStorage
 }
 
 // NewServer creates a new instance of the Server with the provided storage and configuration.
@@ -108,7 +108,7 @@ func (s *Server) ConfigureMiddlewares() {
 
 	// iter 21
 	if s.config.SecureMode {
-		s.router.Use(mycrypt.EncryptMiddleware(s.iStorage.privateKey))
+		s.router.Use(mycrypt.EncryptMiddleware(s.config.PrivateKeyFile))
 	}
 
 	s.router.Use(logger.RequestLogger)
@@ -144,7 +144,7 @@ func (s *Server) ConfigureCrypto() {
 				}
 			}
 
-			s.iStorage.privateKey = privateKey
+			s.internalStorage.privateKey = privateKey
 		}
 	} else {
 		logger.Log.Debug("Private key file not set. Skipping...")

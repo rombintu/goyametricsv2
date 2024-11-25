@@ -32,16 +32,13 @@ func main() {
 
 	// Load the agent configuration
 	conf := config.LoadAgentConfig()
-	if conf.PublicKeyFile != "" {
-		conf.SecureMode = true
-	}
 
 	// Create a new agent instance with the loaded configuration
 	a := agent.NewAgent(conf)
-	a.Configure()
-
 	// Initialize the logger with the environment mode from the configuration
 	logger.Initialize(conf.EnvMode)
+	a.Configure()
+
 	logger.Log.Info("Agent starting", zap.String("address", conf.Address))
 	logger.OnStartUp(buildVersion, buildDate, buildCommit)
 

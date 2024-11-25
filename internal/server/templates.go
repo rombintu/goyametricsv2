@@ -4,6 +4,7 @@ package server
 import (
 	"html/template"
 	"io"
+	"os"
 	"path"
 
 	"github.com/labstack/echo/v4"
@@ -50,9 +51,11 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 // The function uses the template.ParseGlob method to parse all matching templates and stores them in a Template struct.
 // The Template struct is then set as the renderer for the server's router.
 func (s *Server) ConfigureRenderer() {
+	rootDir, _ := os.Getwd()
 	t := &Template{
 		templates: template.Must(template.ParseGlob(
 			path.Join(
+				rootDir,
 				internalDirName,
 				templatesDirName,
 				htmlRegex,

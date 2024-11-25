@@ -99,11 +99,7 @@ func SavePrivateKey(filename string, key *rsa.PrivateKey) error {
 }
 
 func SavePublicKey(filename string, key *rsa.PublicKey) error {
-	// Сериализация публичного ключа в PKIX, ASN.1 DER формат
-	keyBytes, err := x509.MarshalPKIXPublicKey(key)
-	if err != nil {
-		return err
-	}
+	keyBytes := x509.MarshalPKCS1PublicKey(key)
 
 	// Создание PEM блока
 	block := &pem.Block{
@@ -147,12 +143,18 @@ func LoadPublicKey(filename string) (*rsa.PublicKey, error) {
 	return publicKey, nil
 }
 
-func EncryptMiddleware(privateKey *rsa.PrivateKey) echo.MiddlewareFunc {
+func EncryptMiddleware(privateKeyFile string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Дешифрование данных из запроса
 			if c.Request().Method == http.MethodPost || c.Request().Method == http.MethodPut {
 				body, err := io.ReadAll(c.Request().Body)
+				if err != nil {
+					return err
+				}
+
+				// нужно сделать чтобы из памяти брал
+				privateKey, err := LoadPrivateKey(privateKeyFile)
 				if err != nil {
 					return err
 				}

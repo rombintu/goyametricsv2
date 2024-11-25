@@ -80,7 +80,7 @@ func NewAgent(c config.AgentConfig) *Agent {
 		data:           Data{},
 		hashKey:        c.HashKey,
 		rateLimit:      c.RateLimit,
-		secureMode:     c.SecureMode,
+		secureMode:     c.PublicKeyFile != "",
 		publicKeyFile:  c.PublicKeyFile,
 	}
 }
@@ -95,7 +95,10 @@ func (a *Agent) Configure() {
 	if a.secureMode {
 		publicKey, err := mycrypt.LoadPublicKey(a.publicKeyFile)
 		if err != nil {
-			logger.Log.Error("Failed to load public key", zap.Error(err))
+			logger.Log.Warn("Failed to load public key. SecureMode set False", zap.String("file", a.publicKeyFile))
+			logger.Log.Error(err.Error())
+			a.secureMode = false
+			return
 		}
 		a.publicKey = publicKey
 	}
