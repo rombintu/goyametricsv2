@@ -71,7 +71,7 @@ func main() {
 
 	// Create a channel to capture termination signals
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
 	// Wait for a termination signal
 	<-sigChan
