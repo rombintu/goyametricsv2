@@ -53,3 +53,5 @@ bin
 *.key
 *.cert
 *priv*
+
+*.json
