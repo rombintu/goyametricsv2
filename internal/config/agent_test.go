@@ -52,3 +52,64 @@ func TestLoadAgentConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadAgentConfigFromFile(t *testing.T) {
+	testCases := []struct {
+		name           string
+		configPathFile string
+		createFile     bool
+		configData     string
+		expectedConfig AgentConfig
+		expectedError  bool
+	}{
+		{
+			name:           "Valid_Config_File",
+			configPathFile: "testconfig.json",
+			createFile:     true,
+			configData:     `{"address": "localhost:8080", "report_interval": 10}`,
+			expectedConfig: AgentConfig{
+				Address:        "localhost:8080",
+				ReportInterval: 10,
+			},
+			expectedError: false,
+		},
+		{
+			name:           "Non-Existent_File",
+			configPathFile: "nonexistentfile.json",
+			createFile:     false,
+			expectedError:  true,
+		},
+		{
+			name:           "Invalid_JSON",
+			configPathFile: "invalidconfig.json",
+			createFile:     false,
+			configData:     `{"host": "localhost", "port": "invalid"}`,
+			expectedError:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.createFile {
+				err := os.WriteFile(tc.configPathFile, []byte(tc.configData), 0644)
+				if err != nil {
+					t.Fatalf("Failed to create config file: %v", err)
+				}
+				defer os.Remove(tc.configPathFile)
+			}
+
+			config, err := loadAgentConfigFromFile(tc.configPathFile)
+			if tc.expectedError && err == nil {
+				t.Errorf("Expected error, but got none")
+			} else if !tc.expectedError && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+
+			if !tc.expectedError {
+				if config != tc.expectedConfig {
+					t.Errorf("Expected config %+v, but got %+v", tc.expectedConfig, config)
+				}
+			}
+		})
+	}
+}

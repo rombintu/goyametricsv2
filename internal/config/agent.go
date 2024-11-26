@@ -8,10 +8,10 @@ import (
 )
 
 type AgentConfig struct {
-	Address        string `yaml:"address" env-default:"http://localhost:8080" json:"address"`
-	PollInterval   int64  `yaml:"pollInterval" env-default:"2" json:"poll_interval"`
-	ReportInterval int64  `yaml:"reportInterval" env-default:"10" json:"report_interval"`
-	EnvMode        string `yaml:"EnvMode" env-default:"dev"`
+	Address        string `env-default:"http://localhost:8080" json:"address"`
+	PollInterval   int64  `env-default:"2" json:"poll_interval"`
+	ReportInterval int64  `env-default:"10" json:"report_interval"`
+	EnvMode        string `env-default:"dev"`
 	HashKey        string
 	RateLimit      int64
 	// Путь до файла с публичным ключом.

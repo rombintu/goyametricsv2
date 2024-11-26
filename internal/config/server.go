@@ -10,14 +10,14 @@ import (
 )
 
 type ServerConfig struct {
-	Listen        string `yaml:"Listen" env-default:"localhost:8080" json:"address"`
-	StorageDriver string `yaml:"StorageDriver" env-default:"mem"`
-	EnvMode       string `yaml:"EnvMode" env-default:"dev" json:"env_mode"`
-	StoreInterval int64  `yaml:"StoreInterval" env-default:"300" json:"store_interval"`
-	StoragePath   string `yaml:"StoragePath" env-default:"store.json" json:"store_file"`
-	StorageURL    string `yaml:"StorageURL" json:"database_dsn"`
-	RestoreFlag   bool   `yaml:"RestoreFlag" env-default:"true" json:"restore"`
-	SyncMode      bool   `yaml:"SyncMode" env-default:"false"`
+	Listen        string `env-default:"localhost:8080" json:"address"`
+	StorageDriver string `env-default:"mem"`
+	EnvMode       string `env-default:"dev" json:"env_mode"`
+	StoreInterval int64  `env-default:"300" json:"store_interval"`
+	StoragePath   string `env-default:"store.json" json:"store_file"`
+	StorageURL    string `json:"database_dsn"`
+	RestoreFlag   bool   `env-default:"true" json:"restore"`
+	SyncMode      bool   `env-default:"false"`
 
 	// Ключ для подписи
 	HashKey string
