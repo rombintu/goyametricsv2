@@ -4,6 +4,7 @@ package config
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 )
 
@@ -54,7 +55,11 @@ func LoadAgentConfig() AgentConfig {
 	config.ConfigPathFile = tryLoadFromEnv("CONFIG", fromFlags.ConfigPathFile, "")
 
 	if config.ConfigPathFile != "" {
-		fromFile, _ = loadAgentConfigFromFile(config.ConfigPathFile)
+		var err error
+		fromFile, err = loadAgentConfigFromFile(config.ConfigPathFile)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
 	}
 
 	// Из тз нужно сделать такое ключевое слово, иначе не проходят тесты

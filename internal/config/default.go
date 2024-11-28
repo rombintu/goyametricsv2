@@ -51,24 +51,6 @@ const (
 	hintPathConfig    = "Path to config file"
 )
 
-// tryLoadFromEnv attempts to load a configuration value from an environment variable.
-// If the environment variable is not set, it returns the value from the flags.
-//
-// Parameters:
-// - key: The name of the environment variable.
-// - fromFlags: The default value to use if the environment variable is not set.
-//
-// Returns:
-// - The value from the environment variable if set, otherwise the value from the flags.
-// func tryLoadFromEnv(key, fromFlags string) string {
-// 	value, ok := os.LookupEnv(key)
-// 	if !ok {
-// 		return fromFlags
-// 	} else {
-// 		return value
-// 	}
-// }
-
 // Костыль который еще никто не видел на этом свете
 func tryLoadFromEnv[T any](key string, fromFlags, fromFile T) T {
 	// Пробуем получить значение из переменной окружения
@@ -106,50 +88,4 @@ func tryLoadFromEnv[T any](key string, fromFlags, fromFile T) T {
 
 	// Если значение из флагов пустое, возвращаем значение из файла
 	return fromFile
-}
-
-// tryLoadFromEnvInt64 attempts to load an integer configuration value from an environment variable.
-// If the environment variable is not set or cannot be parsed, it returns the value from the flags.
-//
-// Parameters:
-// - key: The name of the environment variable.
-// - fromFlags: The default value to use if the environment variable is not set or cannot be parsed.
-//
-// Returns:
-// - The parsed value from the environment variable if set and valid, otherwise the value from the flags.
-func tryLoadFromEnvInt64(key string, fromFlags int64) int64 {
-	value, ok := os.LookupEnv(key)
-	if !ok {
-		return fromFlags
-	} else {
-		parse64, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return fromFlags
-		} else {
-			return parse64
-		}
-	}
-}
-
-// tryLoadFromEnvBool attempts to load a boolean configuration value from an environment variable.
-// If the environment variable is not set or cannot be parsed, it returns the value from the flags.
-//
-// Parameters:
-// - key: The name of the environment variable.
-// - fromFlags: The default value to use if the environment variable is not set or cannot be parsed.
-//
-// Returns:
-// - The parsed value from the environment variable if set and valid, otherwise the value from the flags.
-func tryLoadFromEnvBool(key string, fromFlags bool) bool {
-	value, ok := os.LookupEnv(key)
-	if !ok {
-		return fromFlags
-	} else {
-		parseBool, err := strconv.ParseBool(value)
-		if err != nil {
-			return fromFlags
-		} else {
-			return parseBool
-		}
-	}
 }

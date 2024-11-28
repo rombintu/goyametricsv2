@@ -3,7 +3,12 @@ package config
 import (
 	"flag"
 	"os"
+	"path"
 	"testing"
+)
+
+const (
+	confFilePath = "server.json"
 )
 
 func teardown(envlist map[string]string) {
@@ -13,6 +18,8 @@ func teardown(envlist map[string]string) {
 }
 
 func TestLoadServerConfig(t *testing.T) {
+	curDir, _ := os.Getwd()
+	confFileAbsPath := path.Join(curDir, confFilePath)
 	env := make(map[string]string)
 	env["ADDRESS"] = "localhost:8080"
 	env["STORAGE_DRIVER"] = "mem"
@@ -20,6 +27,7 @@ func TestLoadServerConfig(t *testing.T) {
 	env["STORE_INTERVAL"] = "300"
 	env["RESTORE_FLAG"] = "true"
 	env["DATABASE_DSN"] = ""
+	env["CONFIG"] = confFileAbsPath
 
 	tests := []struct {
 		name string
@@ -29,12 +37,13 @@ func TestLoadServerConfig(t *testing.T) {
 		{
 			name: "try_simple_load_server_config",
 			want: ServerConfig{
-				Listen:        "localhost:8080",
-				StorageDriver: "mem",
-				StoreInterval: 300,
-				StoragePath:   "store.json",
-				RestoreFlag:   true,
-				SyncMode:      false,
+				Listen:         "localhost:8080",
+				StorageDriver:  "mem",
+				StoreInterval:  300,
+				StoragePath:    "store.json",
+				RestoreFlag:    true,
+				SyncMode:       false,
+				ConfigPathFile: confFileAbsPath,
 			},
 			env: env,
 		},
@@ -42,10 +51,13 @@ func TestLoadServerConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			for key, value := range tt.env {
+				os.Setenv(key, value)
+			}
+			// Очищаем переменные окружения после теста
 			defer teardown(tt.env)
 			// Сбрасываем флаги перед каждым тестом
-			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-			flag.CommandLine.SetOutput(nil)
+			setupTestFlags()
 
 			// Вызываем функцию LoadServerConfig
 			got := LoadServerConfig()
@@ -53,11 +65,6 @@ func TestLoadServerConfig(t *testing.T) {
 			// Проверяем, что настройки загружены корректно
 			if got != tt.want {
 				t.Errorf("LoadServerConfig() = %v, want %v", got, tt.want)
-			}
-
-			// Очищаем переменные окружения после теста
-			for key := range tt.env {
-				os.Unsetenv(key)
 			}
 		})
 	}
@@ -76,10 +83,10 @@ func TestLoadServerConfigFromFile(t *testing.T) {
 			name:           "Valid_Config_File",
 			configPathFile: "testconfig.json",
 			createFile:     true,
-			configData:     `{"address": "localhost:8080", "store_interval": 0}`,
+			configData:     `{"address": "localhost:8080", "store_interval": "10s"}`,
 			expectedConfig: ServerConfig{
 				Listen:        "localhost:8080",
-				StoreInterval: 0,
+				StoreInterval: 10,
 			},
 			expectedError: false,
 		},
@@ -122,4 +129,10 @@ func TestLoadServerConfigFromFile(t *testing.T) {
 			}
 		})
 	}
+}
+
+func setupTestFlags() {
+	// Сбрасываем флаги перед каждым тестом
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	flag.CommandLine.SetOutput(nil)
 }

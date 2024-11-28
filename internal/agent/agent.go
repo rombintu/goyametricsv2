@@ -95,8 +95,7 @@ func (a *Agent) Configure() {
 	if a.secureMode {
 		publicKey, err := mycrypt.LoadPublicKey(a.publicKeyFile)
 		if err != nil {
-			logger.Log.Warn("Failed to load public key. SecureMode set False", zap.String("file", a.publicKeyFile))
-			logger.Log.Error(err.Error())
+			logger.Log.Error("Failed to load public key. SecureMode set False", zap.Error(err), zap.String("file", a.publicKeyFile))
 			a.secureMode = false
 			return
 		}
