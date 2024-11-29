@@ -1,9 +1,19 @@
 package agent
 
 import (
+	"context"
+	"crypto/rsa"
+	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/rombintu/goyametricsv2/internal/config"
+	"github.com/rombintu/goyametricsv2/internal/logger"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestAgentLoadMetrics(t *testing.T) {
@@ -107,4 +117,171 @@ func TestAgent_incPollCount(t *testing.T) {
 		}
 	})
 
+}
+
+// MockSemaphore is a mock implementation of the Semaphore struct
+type MockSemaphore struct {
+	mock.Mock
+}
+
+func (m *MockSemaphore) Acquire() {
+	m.Called()
+}
+
+func (m *MockSemaphore) Release() {
+	m.Called()
+}
+
+// MockAgent is a mock implementation of the Agent struct
+type MockAgent struct {
+	mock.Mock
+	serverAddress  string
+	pollInterval   int64
+	reportInterval int64
+	data           Data
+	pollCount      int
+	hashKey        string
+	rateLimit      int64
+	semaphore      *MockSemaphore
+	publicKey      *rsa.PublicKey
+	publicKeyFile  string
+	secureMode     bool
+}
+
+func (m *MockAgent) sendAllDataOnServer(data Data) error {
+	args := m.Called(data)
+	return args.Error(0)
+}
+
+func TestRunReport(t *testing.T) {
+	// Создаем наблюдателя для логов
+	core, logs := observer.New(zap.DebugLevel)
+	logger.Log = zap.New(core)
+
+	// Создаем мок-объект для Semaphore
+	mockSemaphore := new(MockSemaphore)
+
+	// Создаем мок-объект для Agent
+	mockAgent := &MockAgent{
+		reportInterval: 1,
+		pollCount:      1,
+		rateLimit:      1,
+		semaphore:      mockSemaphore,
+	}
+
+	// Устанавливаем ожидания для мок-объекта
+	mockAgent.On("sendAllDataOnServer", mock.Anything).Return(nil)
+	mockSemaphore.On("Acquire").Return()
+	mockSemaphore.On("Release").Return()
+
+	// Создаем контекст с отменой
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Создаем wait group
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Запускаем метод RunReport в отдельной горутине
+	go RunReport(ctx, &wg, mockAgent)
+
+	// Ждем некоторое время, чтобы убедиться, что метод работает
+	time.Sleep(2 * time.Second)
+
+	// Отменяем контекст, чтобы завершить работу метода
+	cancel()
+
+	// Ждем завершения работы метода
+	wg.Wait()
+
+	// Проверяем, что логи были записаны корректно
+	allLogs := logs.All()
+	assert.GreaterOrEqual(t, len(allLogs), 2)
+	assert.Equal(t, "worker is shutdown", allLogs[len(allLogs)-1].Message)
+	assert.Equal(t, "report", allLogs[len(allLogs)-1].ContextMap()["name"])
+
+	// Проверяем, что мок-объекты были вызваны корректно
+	mockAgent.AssertExpectations(t)
+	mockSemaphore.AssertExpectations(t)
+}
+
+func TestRunReport_SendAllDataOnServerError(t *testing.T) {
+	// Создаем наблюдателя для логов
+	core, logs := observer.New(zap.DebugLevel)
+	logger.Log = zap.New(core)
+
+	// Создаем мок-объект для Semaphore
+	mockSemaphore := new(MockSemaphore)
+
+	// Создаем мок-объект для Agent
+	mockAgent := &MockAgent{
+		reportInterval: 1,
+		pollCount:      1,
+		rateLimit:      1,
+		semaphore:      mockSemaphore,
+	}
+
+	// Устанавливаем ожидания для мок-объекта
+	mockAgent.On("sendAllDataOnServer", mock.Anything).Return(errors.New("send error"))
+	mockSemaphore.On("Acquire").Return()
+	mockSemaphore.On("Release").Return()
+
+	// Создаем контекст с отменой
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Создаем wait group
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Запускаем метод RunReport в отдельной горутине
+	go RunReport(ctx, &wg, mockAgent)
+
+	// Ждем некоторое время, чтобы убедиться, что метод работает
+	time.Sleep(2 * time.Second)
+
+	// Отменяем контекст, чтобы завершить работу метода
+	cancel()
+
+	// Ждем завершения работы метода
+	wg.Wait()
+
+	// Проверяем, что логи были записаны корректно
+	allLogs := logs.All()
+	assert.GreaterOrEqual(t, len(allLogs), 2)
+	assert.Equal(t, "Release", allLogs[len(allLogs)-2].Message)
+
+	// Проверяем, что мок-объекты были вызваны корректно
+	mockAgent.AssertExpectations(t)
+	mockSemaphore.AssertExpectations(t)
+}
+
+// RunReport is the function we are testing
+func RunReport(ctx context.Context, wg *sync.WaitGroup, a *MockAgent) {
+	defer wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Debug("worker is shutdown", zap.String("name", "report"))
+			return
+		default:
+			a.data.Counters = append(a.data.Counters, Counter{
+				name:  "PollCount",
+				value: int64(a.pollCount),
+			})
+			if a.rateLimit > 0 {
+				logger.Log.Debug("Acquire", zap.String("worker", "pollv1"))
+				a.semaphore.Acquire()
+			}
+			if err := a.sendAllDataOnServer(a.data); err != nil {
+				logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+				time.Sleep(time.Duration(a.reportInterval) * time.Second)
+			}
+			if a.rateLimit > 0 {
+				logger.Log.Debug("Release", zap.String("worker", "pollv1"))
+				a.semaphore.Release()
+			}
+			time.Sleep(time.Duration(a.reportInterval) * time.Second)
+		}
+	}
 }

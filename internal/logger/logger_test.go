@@ -2,11 +2,16 @@ package logger
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestInitialize(t *testing.T) {
@@ -128,4 +133,63 @@ func Test_ifEmptyOpt(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRequestLogger(t *testing.T) {
+	// Создаем наблюдателя для логов
+	core, logs := observer.New(zapcore.InfoLevel)
+	Log = zap.New(core)
+
+	// Создаем экземпляр echo
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// Устанавливаем заголовки для запроса
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("HashSHA256", "hash123")
+
+	// Устанавливаем заголовки для ответа
+	rec.Header().Set("Content-Type", "application/json")
+	rec.Header().Set("Content-Encoding", "gzip")
+	rec.Header().Set("HashSHA256", "hash123")
+
+	// Создаем тестовую функцию для обработки запроса
+	handler := func(c echo.Context) error {
+		return c.String(http.StatusOK, "test")
+	}
+
+	// Вызываем middleware с тестовой функцией
+	err := RequestLogger(handler)(c)
+
+	// Проверяем, что ошибки нет
+	assert.NoError(t, err)
+
+	// Проверяем, что ответ имеет статус 200
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Проверяем, что логи были записаны корректно
+	allLogs := logs.All()
+	assert.Equal(t, 2, len(allLogs))
+
+	// Проверяем логи запроса
+	reqLog := allLogs[0]
+	assert.Equal(t, "REQEST", reqLog.Message)
+	assert.Equal(t, "/test", reqLog.ContextMap()["URI"])
+	assert.Equal(t, "GET", reqLog.ContextMap()["Method"])
+	assert.NotEmpty(t, reqLog.ContextMap()["Duration"])
+	assert.Equal(t, "application/json", reqLog.ContextMap()["Content-Type"])
+	assert.Equal(t, "gzip", reqLog.ContextMap()["Accept-Encoding"])
+	assert.Equal(t, "hash123", reqLog.ContextMap()["Hash"])
+
+	// Проверяем логи ответа
+	resLog := allLogs[1]
+	assert.Equal(t, "RESPONSE", resLog.Message)
+	assert.Equal(t, int64(http.StatusOK), resLog.ContextMap()["Status Code"])
+	assert.Equal(t, int64(4), resLog.ContextMap()["Size"])
+	assert.Equal(t, "application/json", resLog.ContextMap()["Content-Type"])
+	assert.Equal(t, "gzip", resLog.ContextMap()["Content-Encoding"])
+	assert.Equal(t, "hash123", resLog.ContextMap()["Hash"])
 }
