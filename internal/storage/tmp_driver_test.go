@@ -6,6 +6,7 @@ import (
 )
 
 func Test_tmpDriver_Save(t *testing.T) {
+	storepath := "test.json"
 	type fields struct {
 		data      Data
 		storepath string
@@ -15,13 +16,35 @@ func Test_tmpDriver_Save(t *testing.T) {
 		fields fields
 	}{
 		{
-			name: "saveEmpty",
+			name: "save_with_empty_data",
 			fields: fields{
-				storepath: "test.json",
+				storepath: storepath,
 			},
 		},
 		{
-			name: "save",
+			name: "save_with_empty_path",
+			fields: fields{
+				storepath: storepath,
+				data: Data{
+					Gauges: map[string]float64{
+						"gauge1": -20,
+						"gauge2": -10,
+					},
+					Counters: map[string]int64{
+						"counter1": -1,
+						"counter2": -2,
+					},
+				},
+			},
+		},
+		{
+			name: "save_with_error_values",
+			fields: fields{
+				storepath: storepath,
+			},
+		},
+		{
+			name: "save_valid",
 			fields: fields{
 				data: Data{
 					Gauges: map[string]float64{
@@ -33,7 +56,7 @@ func Test_tmpDriver_Save(t *testing.T) {
 						"counter2": 2,
 					},
 				},
-				storepath: "test.json",
+				storepath: storepath,
 			},
 		},
 	}

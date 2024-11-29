@@ -50,16 +50,19 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 //
 // The function uses the template.ParseGlob method to parse all matching templates and stores them in a Template struct.
 // The Template struct is then set as the renderer for the server's router.
-func (s *Server) ConfigureRenderer() {
-	rootDir, _ := os.Getwd()
+func (s *Server) ConfigureRenderer(templatesPath string) {
+	if templatesPath == "" {
+		rootDir, _ := os.Getwd()
+		templatesPath = path.Join(
+			rootDir,
+			internalDirName,
+			templatesDirName,
+			htmlRegex,
+		)
+	}
 	t := &Template{
 		templates: template.Must(template.ParseGlob(
-			path.Join(
-				rootDir,
-				internalDirName,
-				templatesDirName,
-				htmlRegex,
-			),
+			templatesPath,
 		)),
 	}
 	s.router.Renderer = t

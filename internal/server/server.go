@@ -47,7 +47,7 @@ func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
 
 // Configure sets up various components of the server, including the renderer, middlewares, router, storage, and pprof.
 func (s *Server) Configure() {
-	s.ConfigureRenderer()
+	s.ConfigureRenderer("")
 	s.ConfigureMiddlewares()
 	s.ConfigureRouter()
 	s.ConfigureStorage()

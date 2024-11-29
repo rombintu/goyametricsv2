@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="20">
   <rect width="100" height="20" fill="#555"/>
-  <rect width="57.1" height="20" fill="#4c1"/>
-  <text x="5" y="15" fill="#fff" font-family="Arial, sans-serif" font-size="12">57.1%</text>
+  <rect width="60.8" height="20" fill="#4c1"/>
+  <text x="5" y="15" fill="#fff" font-family="Arial, sans-serif" font-size="12">60.8%</text>
 </svg>
