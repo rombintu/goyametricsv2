@@ -31,6 +31,11 @@ func main() {
 		conf.StoragePath = conf.StorageURL
 	}
 
+	// inc 21
+	if conf.PrivateKeyFile != "" {
+		conf.SecureMode = true
+	}
+
 	// Create a new storage instance based on the configuration
 	storage := storage.NewStorage(conf.StorageDriver, conf.StoragePath)
 
@@ -66,7 +71,7 @@ func main() {
 
 	// Create a channel to capture termination signals
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
 	// Wait for a termination signal
 	<-sigChan

@@ -236,7 +236,6 @@ func Test_pgxDriver_Get(t *testing.T) {
 			_, err := db.Get(tt.args.mtype, tt.args.mname)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("pgxDriver.Get() error = %v, wantErr %v", err, tt.wantErr)
-				return
 			}
 		})
 	}

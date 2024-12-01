@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -19,6 +20,7 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	models "github.com/rombintu/goyametricsv2/internal/models"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/mycrypt"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"github.com/rombintu/goyametricsv2/lib/myhash"
 	"github.com/rombintu/goyametricsv2/lib/patterns"
@@ -37,6 +39,11 @@ type Agent struct {
 	hashKey        string              // The key used for hashing the metrics data
 	rateLimit      int64               // The rate limit for sending metrics
 	semaphore      *patterns.Semaphore // Semaphore to control the rate limit
+
+	// iter 21. Cryptographic
+	publicKey     *rsa.PublicKey
+	publicKeyFile string
+	secureMode    bool
 }
 
 // Data represents the collected metrics data, including counters and gauges.
@@ -73,6 +80,8 @@ func NewAgent(c config.AgentConfig) *Agent {
 		data:           Data{},
 		hashKey:        c.HashKey,
 		rateLimit:      c.RateLimit,
+		secureMode:     c.PublicKeyFile != "",
+		publicKeyFile:  c.PublicKeyFile,
 	}
 }
 
@@ -81,6 +90,16 @@ func (a *Agent) Configure() {
 	// Configure semaphore if rate limit is greater than 0
 	if a.rateLimit > 0 {
 		a.semaphore = patterns.NewSemaphore(a.rateLimit)
+	}
+
+	if a.secureMode {
+		publicKey, err := mycrypt.LoadPublicKey(a.publicKeyFile)
+		if err != nil {
+			logger.Log.Error("Failed to load public key. SecureMode set False", zap.Error(err), zap.String("file", a.publicKeyFile))
+			a.secureMode = false
+			return
+		}
+		a.publicKey = publicKey
 	}
 }
 
@@ -138,6 +157,13 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 	gzipWriter.Close()
 
 	// End gzip compression
+
+	// Start crypto
+	if err := mycrypt.EncryptWithPublicKey(a.publicKey, &buff); err != nil {
+		logger.Log.Error("failed encrypt data with public key", zap.Error(err))
+		return err
+	}
+	// End crypto
 
 	req, err := http.NewRequest(http.MethodPost, url, &buff)
 	if err != nil {

@@ -35,10 +35,10 @@ func main() {
 
 	// Create a new agent instance with the loaded configuration
 	a := agent.NewAgent(conf)
-	a.Configure()
-
 	// Initialize the logger with the environment mode from the configuration
 	logger.Initialize(conf.EnvMode)
+	a.Configure()
+
 	logger.Log.Info("Agent starting", zap.String("address", conf.Address))
 	logger.OnStartUp(buildVersion, buildDate, buildCommit)
 
@@ -56,7 +56,7 @@ func main() {
 
 	// Create a channel to capture termination signals
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 
 	// Start a goroutine to listen for termination signals
 	go func() {

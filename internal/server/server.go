@@ -2,6 +2,7 @@
 package server
 
 import (
+	"crypto/rsa"
 	"net/http"
 
 	"github.com/labstack/echo-contrib/pprof"
@@ -9,16 +10,22 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/mycrypt"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"github.com/rombintu/goyametricsv2/lib/myhash"
 	"go.uber.org/zap"
 )
 
+type InternalStorage struct {
+	privateKey *rsa.PrivateKey
+}
+
 // Server represents the main server struct that holds the configuration, storage, and router.
 type Server struct {
-	config  config.ServerConfig // Configuration for the server
-	storage storage.Storage     // Storage interface for managing data
-	router  *echo.Echo          // Echo router for handling HTTP requests
+	config          config.ServerConfig // Configuration for the server
+	storage         storage.Storage     // Storage interface for managing data
+	router          *echo.Echo          // Echo router for handling HTTP requests
+	internalStorage InternalStorage
 }
 
 // NewServer creates a new instance of the Server with the provided storage and configuration.
@@ -40,11 +47,12 @@ func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
 
 // Configure sets up various components of the server, including the renderer, middlewares, router, storage, and pprof.
 func (s *Server) Configure() {
-	s.ConfigureRenderer()
+	s.ConfigureRenderer("")
 	s.ConfigureMiddlewares()
 	s.ConfigureRouter()
 	s.ConfigureStorage()
 	s.ConfigurePprof()
+	s.ConfigureCrypto()
 }
 
 // Run starts the server by listening on the configured address and handling incoming requests.
@@ -97,6 +105,12 @@ func (s *Server) ConfigureRouter() {
 // It initializes the logger, adds request logging, gzip compression, and hash checking middlewares.
 func (s *Server) ConfigureMiddlewares() {
 	logger.Initialize(s.config.EnvMode)
+
+	// iter 21
+	if s.config.SecureMode {
+		s.router.Use(mycrypt.EncryptMiddleware(s.config.PrivateKeyFile))
+	}
+
 	s.router.Use(logger.RequestLogger)
 
 	// Gzip middleware for compression
@@ -104,12 +118,37 @@ func (s *Server) ConfigureMiddlewares() {
 
 	// Hash check middleware for verifying request integrity
 	s.router.Use(myhash.HashCheckMiddleware(s.config.HashKey))
+
 }
 
 // ConfigurePprof registers the pprof handlers with the server's router.
 // This allows for profiling the server's performance.
 func (s *Server) ConfigurePprof() {
 	pprof.Register(s.router)
+}
+
+func (s *Server) ConfigureCrypto() {
+	// Если путь установлен
+	if s.config.SecureMode {
+		// Если ключ по пути неверный
+		if !mycrypt.ValidPrivateKey(s.config.PrivateKeyFile) {
+			var err error
+			var privateKey *rsa.PrivateKey
+			privateKey, err = mycrypt.LoadPrivateKey(s.config.PrivateKeyFile)
+			if err != nil {
+				logger.Log.Debug("Private key is not valid. Generating new private and public keys...")
+				// Делаем новый ключ по этому пути
+				privateKey, err = mycrypt.GenRSAKeyPair(s.config.PrivateKeyFile)
+				if err != nil {
+					logger.Log.Error(err.Error())
+				}
+			}
+
+			s.internalStorage.privateKey = privateKey
+		}
+	} else {
+		logger.Log.Debug("Private key file not set. Skipping...")
+	}
 }
 
 // syncStorage synchronizes the storage by saving any pending changes.

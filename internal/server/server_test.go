@@ -53,3 +53,85 @@ func TestSyncStorage(t *testing.T) {
 		server.SyncStorage()
 	})
 }
+
+func TestConfigureStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	t.Run("Simple_configure_storage", func(t *testing.T) {
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Open().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
+		server := NewServer(
+			m,
+			config.ServerConfig{},
+		)
+		defer server.Shutdown()
+		server.ConfigureStorage()
+	})
+}
+
+func TestConfigureMiddlewares(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	t.Run("Simple_configure_middlewares", func(t *testing.T) {
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
+		// Создаем экземпляр Server с моками
+		server := NewServer(
+			m,
+			config.ServerConfig{},
+		)
+		defer server.Shutdown()
+
+		// Вызываем метод
+		server.ConfigureMiddlewares()
+	})
+}
+
+func TestConfigurePprof(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	t.Run("Simple_configure_pprof", func(t *testing.T) {
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
+		// Создаем экземпляр Server с моками
+		server := NewServer(
+			m,
+			config.ServerConfig{},
+		)
+		defer server.Shutdown()
+
+		// Вызываем метод
+		server.ConfigurePprof()
+	})
+}
+
+func TestConfigureCrypto(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStorage(ctrl)
+	t.Run("Simple_configure_crypto", func(t *testing.T) {
+		m.EXPECT().Ping().Return(nil).AnyTimes()
+		m.EXPECT().Save().Return(nil).AnyTimes()
+		m.EXPECT().Close().Return(nil).AnyTimes()
+		// Создаем экземпляр Server с моками
+		server := NewServer(
+			m,
+			config.ServerConfig{},
+		)
+		defer server.Shutdown()
+
+		// Вызываем метод
+		server.ConfigureCrypto()
+	})
+}
