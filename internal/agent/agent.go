@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -44,6 +45,7 @@ type Agent struct {
 	publicKey     *rsa.PublicKey
 	publicKeyFile string
 	secureMode    bool
+	host          string
 }
 
 // Data represents the collected metrics data, including counters and gauges.
@@ -82,6 +84,7 @@ func NewAgent(c config.AgentConfig) *Agent {
 		rateLimit:      c.RateLimit,
 		secureMode:     c.PublicKeyFile != "",
 		publicKeyFile:  c.PublicKeyFile,
+		host:           GetLocalIP().To4().String(),
 	}
 }
 
@@ -122,6 +125,19 @@ func fixServerURL(url string) string {
 // incPollCount increments the poll count by 1.
 func (a *Agent) incPollCount() {
 	a.pollCount++
+}
+
+// Функция для получения IP-адреса машины
+func GetLocalIP() net.IP {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		logger.Log.Error(err.Error())
+	}
+	defer conn.Close()
+
+	localAddress := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddress.IP
 }
 
 // postRequestJSON sends a POST request with JSON data to the specified URL.
@@ -179,6 +195,9 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	// Set header for gzip compression
 	req.Header.Set(echo.HeaderContentEncoding, mygzip.GzipHeader)
+
+	// increment 24. Add x-real-ip
+	req.Header.Set(echo.HeaderXRealIP, a.host)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -389,10 +408,18 @@ func (a *Agent) loadMetrics() {
 // Returns:
 // - An error if the request fails, otherwise nil.
 func (a *Agent) Ping() error {
-	resp, err := http.Get(a.serverAddress + "/ping")
+	req, err := http.NewRequest(http.MethodGet, a.serverAddress+"/ping", nil)
 	if err != nil {
 		return err
 	}
+	req.Header.Set(echo.HeaderXRealIP, a.host)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
 	defer resp.Body.Close()
 	return nil
 }

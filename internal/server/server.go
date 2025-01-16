@@ -13,6 +13,7 @@ import (
 	"github.com/rombintu/goyametricsv2/lib/mycrypt"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"github.com/rombintu/goyametricsv2/lib/myhash"
+	"github.com/rombintu/goyametricsv2/lib/myorigin"
 	"go.uber.org/zap"
 )
 
@@ -119,6 +120,11 @@ func (s *Server) ConfigureMiddlewares() {
 	// Hash check middleware for verifying request integrity
 	s.router.Use(myhash.HashCheckMiddleware(s.config.HashKey))
 
+	// iter 24
+	logger.Log.Debug("Trusted subnet: ", zap.String("network", s.config.TrustedSubnet))
+	if s.config.TrustedSubnet != "" {
+		s.router.Use(myorigin.OriginMiddleware(s.config.TrustedSubnet))
+	}
 }
 
 // ConfigurePprof registers the pprof handlers with the server's router.

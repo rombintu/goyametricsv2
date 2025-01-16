@@ -30,6 +30,9 @@ type ServerConfig struct {
 
 	// Config parse from json
 	ConfigPathFile string `json:"-"`
+
+	// iter 24
+	TrustedSubnet string `json:"trusted_subnet"`
 }
 
 // Try load Server Config from flags
@@ -42,6 +45,8 @@ func loadServerConfigFromFlags() ServerConfig {
 	f := flag.String("f", defaultStoragePath, hintStoragePath)
 	r := flag.Bool("r", defaultRestoreFlag, hintRestoreFlag)
 	d := flag.String("d", "", hintStorageURL)
+
+	t := flag.String("t", "", hintTrustedSubnet)
 
 	k := flag.String("k", defaultHashKey, hintHashKey)
 	privateKeyFile := flag.String("crypto-key", defaultPrivateKeyFile, hintPrivateKeyFile)
@@ -69,6 +74,9 @@ func loadServerConfigFromFlags() ServerConfig {
 
 	// increment 22
 	config.ConfigPathFile = *configFile
+
+	// increment 24
+	config.TrustedSubnet = *t
 
 	return config
 }
@@ -113,6 +121,9 @@ func LoadServerConfig() ServerConfig {
 
 	// increment 21
 	config.PrivateKeyFile = tryLoadFromEnv("CRYPTO_KEY", fromFlags.PrivateKeyFile, fromFile.PrivateKeyFile)
+
+	// increment 24
+	config.TrustedSubnet = tryLoadFromEnv("TRUSTED_SUBNET", fromFlags.TrustedSubnet, fromFile.TrustedSubnet)
 
 	return config
 }

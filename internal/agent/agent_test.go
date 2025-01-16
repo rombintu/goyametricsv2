@@ -285,3 +285,9 @@ func RunReport(ctx context.Context, wg *sync.WaitGroup, a *MockAgent) {
 		}
 	}
 }
+
+func TestGetLocalIP(t *testing.T) {
+	// Вызываем тестируемую функцию
+	ip := GetLocalIP()
+	t.Logf("got %s", ip)
+}

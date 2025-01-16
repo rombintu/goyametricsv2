@@ -81,19 +81,20 @@ func RequestLogger(next echo.HandlerFunc) echo.HandlerFunc {
 			zap.String("Method", req.Method),
 			zap.String("Duration", duration.String()),
 			// add for Iter7
-			zap.String("Content-Type", req.Header.Get("Content-Type")),
+			zap.String("Content-Type", req.Header.Get(echo.HeaderContentType)),
 			// add for Iter8
-			zap.String("Accept-Encoding", req.Header.Get("Accept-Encoding")),
+			zap.String("Accept-Encoding", req.Header.Get(echo.HeaderAcceptEncoding)),
 			// add for Iter 14
 			zap.String("Hash", req.Header.Get("HashSHA256")),
+			zap.String("Host", req.Header.Get(echo.HeaderXRealIP)),
 		)
 		Log.Info("RESPONSE",
 			zap.Int("Status Code", res.Status),
 			zap.Int64("Size", res.Size),
 			// add for Iter7
-			zap.String("Content-Type", res.Header().Get("Content-Type")),
+			zap.String("Content-Type", res.Header().Get(echo.HeaderContentType)),
 			// add for Iter8
-			zap.String("Content-Encoding", res.Header().Get("Content-Encoding")),
+			zap.String("Content-Encoding", res.Header().Get(echo.HeaderContentEncoding)),
 			zap.String("Hash", res.Header().Get("HashSHA256")),
 		)
 		return err

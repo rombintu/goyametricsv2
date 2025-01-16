@@ -49,6 +49,9 @@ const (
 	// Inter 22
 	defaultPathConfig = ""
 	hintPathConfig    = "Path to config file"
+
+	// Inter 24
+	hintTrustedSubnet = "Resolve subnet hosts agent"
 )
 
 // Костыль который еще никто не видел на этом свете
