@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	models "github.com/rombintu/goyametricsv2/internal/models"
+	pb "github.com/rombintu/goyametricsv2/internal/server/proto"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/rombintu/goyametricsv2/lib/mycrypt"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
@@ -28,6 +30,8 @@ import (
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // Agent represents the agent that collects and reports metrics to the server.
@@ -46,6 +50,7 @@ type Agent struct {
 	publicKeyFile string
 	secureMode    bool
 	host          string
+	grpcPort      int64
 }
 
 // Data represents the collected metrics data, including counters and gauges.
@@ -85,6 +90,7 @@ func NewAgent(c config.AgentConfig) *Agent {
 		secureMode:     c.PublicKeyFile != "",
 		publicKeyFile:  c.PublicKeyFile,
 		host:           GetLocalIP().To4().String(),
+		grpcPort:       c.GRPCPort,
 	}
 }
 
@@ -175,9 +181,11 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 	// End gzip compression
 
 	// Start crypto
-	if err := mycrypt.EncryptWithPublicKey(a.publicKey, &buff); err != nil {
-		logger.Log.Error("failed encrypt data with public key", zap.Error(err))
-		return err
+	if a.secureMode {
+		if err := mycrypt.EncryptWithPublicKey(a.publicKey, &buff); err != nil {
+			logger.Log.Error("failed encrypt data with public key", zap.Error(err))
+			return err
+		}
 	}
 	// End crypto
 
@@ -245,6 +253,47 @@ func (a *Agent) sendAllDataOnServer(data Data) error {
 	return nil
 }
 
+// iter 25
+func (a *Agent) sendDataOnGRPCServer(data Data) error {
+	conn, err := grpc.Dial(fmt.Sprintf(
+		":%d", a.grpcPort),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	client := pb.NewMetricsClient(conn)
+	ctx := context.Background()
+	for _, c := range data.Counters {
+		_, err := client.UpdateMetric(ctx, &pb.UpdateMetricRequest{
+			Metric: &pb.Metric{
+				Mtype:  storage.CounterType,
+				Mname:  c.name,
+				Mvalue: strconv.FormatInt(c.value, 10),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, g := range data.Gauges {
+		_, err := client.UpdateMetric(ctx, &pb.UpdateMetricRequest{
+			Metric: &pb.Metric{
+				Mtype:  storage.GaugeType,
+				Mname:  g.name,
+				Mvalue: strconv.FormatFloat(g.value, 'g', -1, 64),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // RunReport runs the report worker that sends collected metrics to the server at the specified interval.
 // It listens for the context to be done to gracefully shut down.
 //
@@ -267,9 +316,11 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 				logger.Log.Debug("Acquire", zap.String("worker", "pollv1"))
 				a.semaphore.Acquire()
 			}
-			if err := a.sendAllDataOnServer(a.data); err != nil {
+			// if err := a.sendAllDataOnServer(a.data); err != nil {
+			// 	logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+			// }
+			if err := a.sendDataOnGRPCServer(a.data); err != nil {
 				logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
-				time.Sleep(time.Duration(a.reportInterval) * time.Second)
 			}
 			if a.rateLimit > 0 {
 				logger.Log.Debug("Release", zap.String("worker", "pollv1"))
@@ -320,9 +371,15 @@ func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 				logger.Log.Debug("Acquire", zap.String("worker", "pollv2"))
 				a.semaphore.Acquire()
 			}
-			if err := a.sendAllDataOnServer(optData); err != nil {
+			// if err := a.sendAllDataOnServer(optData); err != nil {
+			// 	logger.Log.Warn(err.Error())
+			// }
+
+			// iter 25. gRPC
+			if err := a.sendDataOnGRPCServer(optData); err != nil {
 				logger.Log.Warn(err.Error())
 			}
+
 			if a.rateLimit > 0 {
 				logger.Log.Debug("Release", zap.String("worker", "pollv2"))
 				a.semaphore.Release()

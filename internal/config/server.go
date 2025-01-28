@@ -33,6 +33,9 @@ type ServerConfig struct {
 
 	// iter 24
 	TrustedSubnet string `json:"trusted_subnet"`
+
+	// iter 25
+	GRPCPort int64
 }
 
 // Try load Server Config from flags
@@ -52,7 +55,7 @@ func loadServerConfigFromFlags() ServerConfig {
 	privateKeyFile := flag.String("crypto-key", defaultPrivateKeyFile, hintPrivateKeyFile)
 
 	configFile := flag.String("c", defaultPathConfig, hintPathConfig)
-
+	grpcPort := flag.Int64("grpcPort", defaultGRPCPort, hintGRPCPort)
 	flag.Parse()
 
 	config.Listen = *a
@@ -77,6 +80,9 @@ func loadServerConfigFromFlags() ServerConfig {
 
 	// increment 24
 	config.TrustedSubnet = *t
+
+	// increment 25
+	config.GRPCPort = *grpcPort
 
 	return config
 }
@@ -105,6 +111,7 @@ func LoadServerConfig() ServerConfig {
 	// increment 10
 	config.StorageDriver = tryLoadFromEnv("STORAGE_DRIVER", fromFlags.StorageDriver, fromFile.StorageDriver)
 	config.StorageURL = tryLoadFromEnv("DATABASE_DSN", fromFlags.StorageURL, fromFile.StorageURL)
+
 	// Change to sync mode
 	if config.StoreInterval == 0 {
 		config.SyncMode = true
@@ -124,6 +131,9 @@ func LoadServerConfig() ServerConfig {
 
 	// increment 24
 	config.TrustedSubnet = tryLoadFromEnv("TRUSTED_SUBNET", fromFlags.TrustedSubnet, fromFile.TrustedSubnet)
+
+	// increment 25
+	config.GRPCPort = tryLoadFromEnv("GRPC_PORT", fromFlags.GRPCPort, fromFile.GRPCPort)
 
 	return config
 }

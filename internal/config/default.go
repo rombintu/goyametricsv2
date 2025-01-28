@@ -52,6 +52,10 @@ const (
 
 	// Inter 24
 	hintTrustedSubnet = "Resolve subnet hosts agent"
+
+	// Inter 25
+	defaultGRPCPort = 3200
+	hintGRPCPort    = "gRPC protocol Port"
 )
 
 // Костыль который еще никто не видел на этом свете

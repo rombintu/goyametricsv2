@@ -12,7 +12,7 @@ func TestLoadAgentConfig(t *testing.T) {
 	env["REPORT_INTERVAL"] = "2"
 	env["POLL_INTERVAL"] = "10"
 	env["RATE_LIMIT"] = "0"
-	env["KEY"] = "secret"
+	// env["KEY"] = "secret"
 	tests := []struct {
 		name string
 		env  map[string]string
@@ -25,7 +25,8 @@ func TestLoadAgentConfig(t *testing.T) {
 				PollInterval:   10,
 				ReportInterval: 2,
 				RateLimit:      0,
-				HashKey:        "secret",
+				// HashKey:        "secret",
+				GRPCPort: 3200,
 			},
 			env: env,
 		},
@@ -36,6 +37,11 @@ func TestLoadAgentConfig(t *testing.T) {
 			for key, value := range tt.env {
 				os.Setenv(key, value)
 			}
+
+			// Очищаем переменные окружения после теста
+			defer teardown(tt.env)
+			// Сбрасываем флаги перед каждым тестом
+			setupTestFlags()
 
 			// Вызываем функцию LoadServerConfig
 			got := LoadAgentConfig()
