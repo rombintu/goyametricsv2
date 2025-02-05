@@ -6,8 +6,12 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/golang/mock/gomock"
 	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/config"
@@ -16,6 +20,7 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/rombintu/goyametricsv2/lib/ptrhelper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -375,4 +380,117 @@ func TestServer_PingDatabase(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, rec.Code)
 	})
+}
+
+func TestServer_RootHandler_HTMLContent(t *testing.T) {
+	// Создаем временную директорию для шаблонов
+	tmpDir := t.TempDir()
+	templatesDir := filepath.Join(tmpDir, "internal", "templates")
+	err := os.MkdirAll(templatesDir, 0755)
+	require.NoError(t, err)
+
+	// Создаем тестовый шаблон
+	templateContent := `<!DOCTYPE html>
+<html>
+<head>
+    <title>Metrics</title>
+</head>
+<body>
+    <h1>Metrics</h1>
+    <div id="counters">
+        {{range $name, $value := .Counters}}
+        <p class="counter">{{$name}}: {{$value}}</p>
+        {{end}}
+    </div>
+    <div id="gauges">
+        {{range $name, $value := .Gauges}}
+        <p class="gauge">{{$name}}: {{$value}}</p>
+        {{end}}
+    </div>
+</body>
+</html>`
+
+	templatePath := filepath.Join(templatesDir, "metrics.html")
+	err = os.WriteFile(templatePath, []byte(templateContent), 0644)
+	require.NoError(t, err)
+
+	// Инициализация Echo и моков
+	e := echo.New()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStorage := mocks.NewMockStorage(ctrl)
+	expectedData := storage.Data{
+		Counters: storage.Counters{"c1": 1, "c2": 5},
+		Gauges:   storage.Gauges{"g1": 2.3, "g2": 4.56},
+	}
+
+	mockStorage.EXPECT().GetAll().Return(expectedData).Times(1)
+
+	// Инициализация сервера
+	server := &Server{
+		storage: mockStorage,
+		router:  e,
+	}
+
+	// Настройка рендерера с временными шаблонами
+	err = server.ConfigureRenderer(RendererConfig{
+		TemplatesGlob: filepath.Join(templatesDir, "*.html"),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, server.router.Renderer)
+
+	// Подготовка контекста
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// Выполнение обработчика
+	err = server.RootHandler(c)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Парсинг HTML
+	doc, err := goquery.NewDocumentFromReader(rec.Body)
+	require.NoError(t, err)
+
+	// Проверка счетчиков
+	counterDiv := doc.Find("#counters")
+	assert.Equal(t, 1, counterDiv.Length(), "Counters section missing")
+
+	expectedCounters := map[string]string{
+		"c1": "1",
+		"c2": "5",
+	}
+	counterDiv.Find("p.counter").Each(func(i int, s *goquery.Selection) {
+		text := strings.TrimSpace(s.Text())
+		parts := strings.Split(text, ": ")
+		require.Equal(t, 2, len(parts), "Invalid counter format")
+		expectedVal, ok := expectedCounters[parts[0]]
+		if assert.True(t, ok, "Unexpected counter: %s", parts[0]) {
+			assert.Equal(t, expectedVal, parts[1])
+		}
+		delete(expectedCounters, parts[0])
+	})
+	assert.Empty(t, expectedCounters, "Not all counters rendered")
+
+	// Проверка измерений
+	gaugeDiv := doc.Find("#gauges")
+	assert.Equal(t, 1, gaugeDiv.Length(), "Gauges section missing")
+
+	expectedGauges := map[string]string{
+		"g1": "2.3",
+		"g2": "4.56",
+	}
+	gaugeDiv.Find("p.gauge").Each(func(i int, s *goquery.Selection) {
+		text := strings.TrimSpace(s.Text())
+		parts := strings.Split(text, ": ")
+		require.Equal(t, 2, len(parts), "Invalid gauge format")
+		expectedVal, ok := expectedGauges[parts[0]]
+		if assert.True(t, ok, "Unexpected gauge: %s", parts[0]) {
+			assert.Equal(t, expectedVal, parts[1])
+		}
+		delete(expectedGauges, parts[0])
+	})
+	assert.Empty(t, expectedGauges, "Not all gauges rendered")
 }

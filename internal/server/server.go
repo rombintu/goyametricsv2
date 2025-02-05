@@ -54,19 +54,6 @@ func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
 	}
 }
 
-// Configure sets up various components of the server, including the renderer, middlewares, router, storage, and pprof.
-func (s *Server) Configure() {
-	s.ConfigureRenderer("")
-	s.ConfigureMiddlewares()
-	s.ConfigureRouter()
-	s.ConfigureStorage()
-	s.ConfigurePprof()
-	s.ConfigureCrypto()
-
-	// iter 25
-	s.ConfigureProto()
-}
-
 // Run starts the server by listening on the configured address and handling incoming requests.
 // It logs the server's starting URL and handles any errors that occur during the server's operation.
 // If an error occurs, it closes the storage and logs a fatal error.
@@ -208,14 +195,21 @@ func (s *Server) ConfigureProto() {
 }
 
 func (s *Server) GetMetric(ctx context.Context, in *pb.GetMetricRequest) (*pb.GetMetricResponse, error) {
-	var r pb.GetMetricResponse
+	if in == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is nil")
+	}
 	value, err := s.storage.Get(in.Mtype, in.Mname)
 	if err != nil {
 		logger.Log.Error(err.Error(), zap.String("type", in.Mtype), zap.String("id/name", in.Mname))
 		return nil, status.Errorf(codes.NotFound, "not found: %s - %s", in.Mtype, in.Mname)
 	}
-	r.Metric.Mvalue = value
-	return &r, nil
+	return &pb.GetMetricResponse{
+		Metric: &pb.Metric{
+			Mtype:  in.Mtype,
+			Mname:  in.Mname,
+			Mvalue: value,
+		},
+	}, nil
 }
 
 func (s *Server) UpdateMetric(ctx context.Context, in *pb.UpdateMetricRequest) (*pb.UpdateMetricResponse, error) {

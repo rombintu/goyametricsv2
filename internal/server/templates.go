@@ -2,19 +2,22 @@
 package server
 
 import (
+	"errors"
+	"fmt"
 	"html/template"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/labstack/echo/v4"
+	"github.com/rombintu/goyametricsv2/internal/logger"
 )
 
-const (
-	internalDirName  = "internal"
-	templatesDirName = "templates"
-	htmlRegex        = "*.html"
-)
+// const (
+// 	internalDirName  = "internal"
+// 	templatesDirName = "templates"
+// 	htmlRegex        = "*.html"
+// )
 
 // Template represents a struct that holds a collection of parsed templates.
 type Template struct {
@@ -50,20 +53,68 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 //
 // The function uses the template.ParseGlob method to parse all matching templates and stores them in a Template struct.
 // The Template struct is then set as the renderer for the server's router.
-func (s *Server) ConfigureRenderer(templatesPath string) {
-	if templatesPath == "" {
-		rootDir, _ := os.Getwd()
-		templatesPath = path.Join(
-			rootDir,
-			internalDirName,
-			templatesDirName,
-			htmlRegex,
-		)
+// func (s *Server) ConfigureRenderer(templatesPath string) {
+// 	if templatesPath == "" {
+// 		rootDir, _ := os.Getwd()
+// 		templatesPath = path.Join(
+// 			rootDir,
+// 			internalDirName,
+// 			templatesDirName,
+// 			htmlRegex,
+// 		)
+// 	}
+// 	t := &Template{
+// 		templates: template.Must(template.ParseGlob(
+// 			templatesPath,
+// 		)),
+// 	}
+// 	s.router.Renderer = t
+// }
+
+// Config содержит параметры для настройки рендерера шаблонов
+type RendererConfig struct {
+	TemplatesGlob string   // Путь/шаблон для поиска файлов шаблонов
+	DefaultDirs   []string // Дефолтные директории [internal, templates] (опционально)
+	FilePattern   string   // Шаблон файлов (по умолчанию "*.html")
+}
+
+// ConfigureRenderer инициализирует шаблоны для сервера с возможностью кастомизации
+func (s *Server) ConfigureRenderer(cfg RendererConfig) error {
+	// Установка значений по умолчанию
+	if cfg.FilePattern == "" {
+		cfg.FilePattern = "*.html"
 	}
-	t := &Template{
-		templates: template.Must(template.ParseGlob(
-			templatesPath,
-		)),
+	if len(cfg.DefaultDirs) == 0 {
+		cfg.DefaultDirs = []string{"internal", "templates"}
 	}
-	s.router.Renderer = t
+
+	// Определение пути к шаблонам
+	templatesGlob := cfg.TemplatesGlob
+	if templatesGlob == "" {
+		rootDir, err := os.Getwd()
+		if err != nil {
+			logger.Log.Warn("failed to detect working directory")
+		}
+
+		dirs := append([]string{rootDir}, cfg.DefaultDirs...)
+		dirs = append(dirs, cfg.FilePattern)
+		templatesGlob = filepath.Join(dirs...)
+	}
+
+	// Проверка существования файлов шаблонов
+	if matches, _ := filepath.Glob(templatesGlob); len(matches) == 0 {
+		return errors.New(fmt.Sprintf("no template files found by pattern: %s", templatesGlob))
+	}
+
+	// Парсинг шаблонов
+	tmpl, err := template.ParseGlob(templatesGlob)
+	if err != nil {
+		return errors.New("template parsing failed")
+	}
+
+	// Инициализация рендерера
+	s.router.Renderer = &Template{
+		templates: tmpl,
+	}
+	return nil
 }

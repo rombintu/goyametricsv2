@@ -21,6 +21,7 @@ type AgentConfig struct {
 
 	ConfigPathFile string
 	GRPCPort       int64
+	UseGRPC        bool
 }
 
 // Try load Server Config from flags
@@ -34,6 +35,7 @@ func loadAgentConfigFromFlags() AgentConfig {
 	pubkey := flag.String("crypto-key", defaultPubkeyFile, hintPubkeyFile)
 	c := flag.String("c", defaultPathConfig, hintPathConfig)
 	grpcPort := flag.Int64("grpcPort", defaultGRPCPort, hintGRPCPort)
+	useGRPC := flag.Bool("grpc", false, "Select protocol. Switch to grpc")
 	flag.Parse()
 
 	config.Address = *a
@@ -45,6 +47,7 @@ func loadAgentConfigFromFlags() AgentConfig {
 	config.PublicKeyFile = *pubkey
 	config.ConfigPathFile = *c
 
+	config.UseGRPC = *useGRPC
 	config.GRPCPort = *grpcPort
 	return config
 }

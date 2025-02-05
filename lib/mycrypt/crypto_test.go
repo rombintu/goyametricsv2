@@ -7,9 +7,15 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path"
 	"testing"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenRSAKeyPair(t *testing.T) {
@@ -520,4 +526,55 @@ func TestEncryptWithPublicKey(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEncryptMiddleware(t *testing.T) {
+	// Generate a private key for testing
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	assert.NoError(t, err)
+
+	// Save the private key to a temporary file
+	privateKeyFile := "test_private_key.pem"
+	err = SavePrivateKey(privateKeyFile, privateKey)
+	assert.NoError(t, err)
+	defer func() {
+		if err == nil {
+			os.Remove(privateKeyFile)
+		}
+	}()
+
+	// Create a new Echo instance
+	e := echo.New()
+
+	// Define a test handler
+	testHandler := func(c echo.Context) error {
+		body, err := io.ReadAll(c.Request().Body)
+		if err != nil {
+			return err
+		}
+		return c.String(http.StatusOK, string(body))
+	}
+
+	// Use the middleware
+	e.Use(EncryptMiddleware(privateKeyFile))
+
+	// Define a test route
+	e.POST("/test", testHandler)
+
+	// Encrypt the test data
+	originalData := []byte("secret message")
+	encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, &privateKey.PublicKey, originalData)
+	assert.NoError(t, err)
+
+	// Create a request with the encrypted body
+	req := httptest.NewRequest(http.MethodPost, "/test", bytes.NewReader(encryptedData))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+
+	// Perform the request
+	e.ServeHTTP(rec, req)
+
+	// Check the response
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, string(originalData), rec.Body.String())
 }

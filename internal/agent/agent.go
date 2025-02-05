@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,8 +26,6 @@ import (
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"github.com/rombintu/goyametricsv2/lib/myhash"
 	"github.com/rombintu/goyametricsv2/lib/patterns"
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/mem"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -50,6 +47,7 @@ type Agent struct {
 	publicKeyFile string
 	secureMode    bool
 	host          string
+	useGRPC       bool
 	grpcPort      int64
 }
 
@@ -90,7 +88,7 @@ func NewAgent(c config.AgentConfig) *Agent {
 		secureMode:     c.PublicKeyFile != "",
 		publicKeyFile:  c.PublicKeyFile,
 		host:           GetLocalIP().To4().String(),
-		grpcPort:       c.GRPCPort,
+		useGRPC:        c.UseGRPC,
 	}
 }
 
@@ -109,22 +107,6 @@ func (a *Agent) Configure() {
 			return
 		}
 		a.publicKey = publicKey
-	}
-}
-
-// fixServerURL ensures that the server URL starts with "http://".
-// If the URL does not start with "http://", it prepends "http://" to the URL.
-//
-// Parameters:
-// - url: The server URL to be fixed.
-//
-// Returns:
-// - The fixed server URL.
-func fixServerURL(url string) string {
-	if strings.HasPrefix(url, "http://") {
-		return url
-	} else {
-		return fmt.Sprintf("http://%s", url)
 	}
 }
 
@@ -156,7 +138,7 @@ func GetLocalIP() net.IP {
 // Returns:
 // - An error if the request fails, otherwise nil.
 func (a *Agent) postRequestJSON(url string, data any) error {
-	if err := a.TryConnectToServer(); err != nil {
+	if err := TryConnectToServer(a.host, a.serverAddress); err != nil {
 		return err
 	}
 	jsonData, err := json.Marshal(data)
@@ -219,13 +201,13 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 
 // sendAllDataOnServer sends all collected metrics data to the server.
 // It converts the data into the appropriate format and sends it using a POST request.
-//
+
 // Parameters:
 // - data: The data to be sent to the server.
-//
+
 // Returns:
 // - An error if the request fails, otherwise nil.
-func (a *Agent) sendAllDataOnServer(data Data) error {
+func (a *Agent) sendDataHTTP(data Data) error {
 	url := fmt.Sprintf("%s/updates/", a.serverAddress)
 	var metrics []models.Metrics
 
@@ -254,9 +236,9 @@ func (a *Agent) sendAllDataOnServer(data Data) error {
 }
 
 // iter 25
-func (a *Agent) sendDataOnGRPCServer(data Data) error {
+func sendDataGRPC(data Data, grpcPort int64) error {
 	conn, err := grpc.Dial(fmt.Sprintf(
-		":%d", a.grpcPort),
+		":%d", grpcPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
@@ -316,11 +298,16 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 				logger.Log.Debug("Acquire", zap.String("worker", "pollv1"))
 				a.semaphore.Acquire()
 			}
-			// if err := a.sendAllDataOnServer(a.data); err != nil {
-			// 	logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
-			// }
-			if err := a.sendDataOnGRPCServer(a.data); err != nil {
-				logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+
+			// switch ptorocols
+			if a.useGRPC {
+				if err := sendDataGRPC(a.data, a.grpcPort); err != nil {
+					logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+				}
+			} else {
+				if err := a.sendDataHTTP(a.data); err != nil {
+					logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+				}
 			}
 			if a.rateLimit > 0 {
 				logger.Log.Debug("Release", zap.String("worker", "pollv1"))
@@ -366,18 +353,19 @@ func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 			logger.Log.Debug("worker is shutdown", zap.String("name", "pollv2"))
 			return
 		default:
-			optData := a.loadPSUtilsMetrics()
+			optData := loadPSUtilsMetrics()
 			if a.rateLimit > 0 {
 				logger.Log.Debug("Acquire", zap.String("worker", "pollv2"))
 				a.semaphore.Acquire()
 			}
-			// if err := a.sendAllDataOnServer(optData); err != nil {
-			// 	logger.Log.Warn(err.Error())
-			// }
-
-			// iter 25. gRPC
-			if err := a.sendDataOnGRPCServer(optData); err != nil {
-				logger.Log.Warn(err.Error())
+			if a.useGRPC {
+				if err := sendDataGRPC(optData, a.grpcPort); err != nil {
+					logger.Log.Warn(err.Error())
+				}
+			} else {
+				if err := a.sendDataHTTP(optData); err != nil {
+					logger.Log.Warn(err.Error())
+				}
 			}
 
 			if a.rateLimit > 0 {
@@ -387,34 +375,6 @@ func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 			logger.Log.Debug("message from worker", zap.String("name", "poll"), zap.String("action", "load metrics optionally"))
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
-	}
-}
-
-// loadPSUtilsMetrics collects optional metrics using the gopsutil library.
-// It collects metrics related to memory and CPU utilization.
-//
-// Returns:
-// - The collected optional metrics data.
-func (a *Agent) loadPSUtilsMetrics() Data {
-	v, err := mem.VirtualMemory()
-	if err != nil {
-		logger.Log.Warn(err.Error())
-		return Data{}
-	}
-
-	u, err := cpu.Percent(0, false)
-	if err != nil {
-		logger.Log.Warn(err.Error())
-		return Data{}
-	}
-
-	var newGauges []Gauge
-	newGauges = append(newGauges, Gauge{name: "TotalMemory", value: float64(v.Total)})
-	newGauges = append(newGauges, Gauge{name: "FreeMemory", value: float64(v.Free)})
-	newGauges = append(newGauges, Gauge{name: "CPUutilization1", value: u[0]})
-
-	return Data{
-		Gauges: newGauges,
 	}
 }
 
@@ -460,40 +420,19 @@ func (a *Agent) loadMetrics() {
 	a.data.Gauges = gauges
 }
 
-// Ping sends a GET request to the server's ping endpoint to check the connection.
-//
-// Returns:
-// - An error if the request fails, otherwise nil.
-func (a *Agent) Ping() error {
-	req, err := http.NewRequest(http.MethodGet, a.serverAddress+"/ping", nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set(echo.HeaderXRealIP, a.host)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-	return nil
-}
-
 // TryConnectToServer attempts to connect to the server by sending a ping request.
 // It retries the connection up to 5 times with increasing intervals if the initial attempt fails.
 //
 // Returns:
 // - An error if the connection fails after all retries, otherwise nil.
-func (a *Agent) TryConnectToServer() error {
+func TryConnectToServer(host, serverAddress string) error {
 	var err error
-	if err = a.Ping(); err != nil {
+	if err = Ping(host, serverAddress); err != nil {
 		for i := 1; i <= 5; i += 2 {
 			// Try reconnecting after 2 seconds if connection failed
 			logger.Log.Debug("Ping failed, trying to reconnect", zap.Int("attempt", i))
 			time.Sleep(time.Duration(i) * time.Second)
-			if err := a.Ping(); err == nil {
+			if err := Ping(host, serverAddress); err == nil {
 				return nil
 			}
 		}

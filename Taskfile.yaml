@@ -31,7 +31,8 @@ tasks:
       - mockgen -destination=./internal/mocks/mock_storage.go -package=mocks github.com/rombintu/goyametricsv2/internal/storage Storage
   cover:
     cmds:
-      - go test ./... -coverprofile profiles/cover.out && go tool cover -func=profiles/cover.out
+      - go test ./... -coverprofile profiles/dry_cover.out && grep -v ".pb.go" profiles/dry_cover.out > profiles/cover.out && go tool cover -func=profiles/cover.out
+      # - goverage -coverprofile=profiles/dry_cover.out ./... && grep -v ".pb.go" profiles/dry_cover.out > profiles/cover.out
       - task: cover-gen-svg
 
   prepush:

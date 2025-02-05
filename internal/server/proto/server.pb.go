@@ -4,6 +4,7 @@
 // 	protoc        v3.14.0
 // source: internal/server/proto/server.proto
 
+// Package proto internal server protobuffers
 package proto
 
 import (
