@@ -25,10 +25,11 @@ tasks:
       - task: statictest
       - task: build-server
       - task: build-agent
-      - ./metricstest -test.v -agent-binary-path=./cmd/agent/agent -binary-path=./cmd/server/server -server-port=8080 -source-path=./ -file-storage-path=./store-test.json -database-dsn="host=localhost user=admin password=admin dbname=metrics sslmode=disable" -key "secret-key" >> tests.log
+      - ./metricstest -agent-binary-path=./cmd/agent/agent -binary-path=./cmd/server/server -server-port=8080 -source-path=./ -file-storage-path=./store-test.json -database-dsn="host=localhost user=admin password=admin dbname=metrics sslmode=disable" -key "secret-key" > tests.log
   gomock:
     cmds:
       - mockgen -destination=./internal/mocks/mock_storage.go -package=mocks github.com/rombintu/goyametricsv2/internal/storage Storage
+      - mockgen -source=internal/server/proto/server_grpc.pb.go -destination=internal/mocks/mock_grpc.go -package=mocks
   cover:
     cmds:
       - go test ./... -coverprofile profiles/dry_cover.out && grep -v ".pb.go" profiles/dry_cover.out > profiles/cover.out && go tool cover -func=profiles/cover.out

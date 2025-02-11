@@ -103,7 +103,7 @@ func (s *Server) ConfigureRenderer(cfg RendererConfig) error {
 
 	// Проверка существования файлов шаблонов
 	if matches, _ := filepath.Glob(templatesGlob); len(matches) == 0 {
-		return errors.New(fmt.Sprintf("no template files found by pattern: %s", templatesGlob))
+		return fmt.Errorf("no template files found by pattern: %s", templatesGlob)
 	}
 
 	// Парсинг шаблонов

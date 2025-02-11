@@ -8,10 +8,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
+	"regexp"
 	"testing"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/golang/mock/gomock"
 	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/config"
@@ -450,47 +449,46 @@ func TestServer_RootHandler_HTMLContent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	// Парсинг HTML
-	doc, err := goquery.NewDocumentFromReader(rec.Body)
-	require.NoError(t, err)
+	// Получаем HTML-ответ
+	htmlResponse := rec.Body.String()
 
 	// Проверка счетчиков
-	counterDiv := doc.Find("#counters")
-	assert.Equal(t, 1, counterDiv.Length(), "Counters section missing")
+	counterRegex := regexp.MustCompile(`<p class="counter">([^<]+): ([^<]+)</p>`)
+	counterMatches := counterRegex.FindAllStringSubmatch(htmlResponse, -1)
+	require.Equal(t, 2, len(counterMatches), "Expected 2 counters")
 
 	expectedCounters := map[string]string{
 		"c1": "1",
 		"c2": "5",
 	}
-	counterDiv.Find("p.counter").Each(func(i int, s *goquery.Selection) {
-		text := strings.TrimSpace(s.Text())
-		parts := strings.Split(text, ": ")
-		require.Equal(t, 2, len(parts), "Invalid counter format")
-		expectedVal, ok := expectedCounters[parts[0]]
-		if assert.True(t, ok, "Unexpected counter: %s", parts[0]) {
-			assert.Equal(t, expectedVal, parts[1])
+	for _, match := range counterMatches {
+		name := match[1]
+		value := match[2]
+		expectedVal, ok := expectedCounters[name]
+		if assert.True(t, ok, "Unexpected counter: %s", name) {
+			assert.Equal(t, expectedVal, value)
 		}
-		delete(expectedCounters, parts[0])
-	})
+		delete(expectedCounters, name)
+	}
 	assert.Empty(t, expectedCounters, "Not all counters rendered")
 
 	// Проверка измерений
-	gaugeDiv := doc.Find("#gauges")
-	assert.Equal(t, 1, gaugeDiv.Length(), "Gauges section missing")
+	gaugeRegex := regexp.MustCompile(`<p class="gauge">([^<]+): ([^<]+)</p>`)
+	gaugeMatches := gaugeRegex.FindAllStringSubmatch(htmlResponse, -1)
+	require.Equal(t, 2, len(gaugeMatches), "Expected 2 gauges")
 
 	expectedGauges := map[string]string{
 		"g1": "2.3",
 		"g2": "4.56",
 	}
-	gaugeDiv.Find("p.gauge").Each(func(i int, s *goquery.Selection) {
-		text := strings.TrimSpace(s.Text())
-		parts := strings.Split(text, ": ")
-		require.Equal(t, 2, len(parts), "Invalid gauge format")
-		expectedVal, ok := expectedGauges[parts[0]]
-		if assert.True(t, ok, "Unexpected gauge: %s", parts[0]) {
-			assert.Equal(t, expectedVal, parts[1])
+	for _, match := range gaugeMatches {
+		name := match[1]
+		value := match[2]
+		expectedVal, ok := expectedGauges[name]
+		if assert.True(t, ok, "Unexpected gauge: %s", name) {
+			assert.Equal(t, expectedVal, value)
 		}
-		delete(expectedGauges, parts[0])
-	})
+		delete(expectedGauges, name)
+	}
 	assert.Empty(t, expectedGauges, "Not all gauges rendered")
 }

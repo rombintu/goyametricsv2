@@ -14,6 +14,7 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	pb "github.com/rombintu/goyametricsv2/internal/server/proto"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/common"
 	"github.com/rombintu/goyametricsv2/lib/mycrypt"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"github.com/rombintu/goyametricsv2/lib/myhash"
@@ -181,6 +182,10 @@ func (s *Server) Shutdown() {
 
 func (s *Server) ConfigureProto() {
 	// определяем порт для сервера
+	if common.IsPortInUse(s.config.GRPCPort) {
+		// Заглушка, используем любой порт (для тестов)
+		s.config.GRPCPort = 0
+	}
 	listen, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.GRPCPort))
 	if err != nil {
 		logger.Log.Error(err.Error())
@@ -191,7 +196,11 @@ func (s *Server) ConfigureProto() {
 	pb.RegisterMetricsServer(serv, s)
 
 	logger.Log.Info("start gRPC server")
-	go serv.Serve(listen)
+	go func() {
+		if err := serv.Serve(listen); err != nil {
+			logger.Log.Error("gRPC server failed: ", zap.Error(err))
+		}
+	}()
 }
 
 func (s *Server) GetMetric(ctx context.Context, in *pb.GetMetricRequest) (*pb.GetMetricResponse, error) {

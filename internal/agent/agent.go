@@ -236,17 +236,9 @@ func (a *Agent) sendDataHTTP(data Data) error {
 }
 
 // iter 25
-func sendDataGRPC(data Data, grpcPort int64) error {
-	conn, err := grpc.Dial(fmt.Sprintf(
-		":%d", grpcPort),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	client := pb.NewMetricsClient(conn)
+func sendDataGRPC(data Data, client pb.MetricsClient) error {
 	ctx := context.Background()
+
 	for _, c := range data.Counters {
 		_, err := client.UpdateMetric(ctx, &pb.UpdateMetricRequest{
 			Metric: &pb.Metric{
@@ -301,7 +293,17 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 
 			// switch ptorocols
 			if a.useGRPC {
-				if err := sendDataGRPC(a.data, a.grpcPort); err != nil {
+				conn, err := grpc.Dial(fmt.Sprintf(
+					":%d", a.grpcPort),
+					grpc.WithTransportCredentials(insecure.NewCredentials()),
+				)
+				if err != nil {
+					logger.Log.Error("error from grpc Client", zap.Error(err))
+					continue
+				}
+				defer conn.Close()
+				client := pb.NewMetricsClient(conn)
+				if err := sendDataGRPC(a.data, client); err != nil {
 					logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
 				}
 			} else {
@@ -359,8 +361,18 @@ func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 				a.semaphore.Acquire()
 			}
 			if a.useGRPC {
-				if err := sendDataGRPC(optData, a.grpcPort); err != nil {
-					logger.Log.Warn(err.Error())
+				conn, err := grpc.Dial(fmt.Sprintf(
+					":%d", a.grpcPort),
+					grpc.WithTransportCredentials(insecure.NewCredentials()),
+				)
+				if err != nil {
+					logger.Log.Error("error from grpc Client", zap.Error(err))
+					continue
+				}
+				defer conn.Close()
+				client := pb.NewMetricsClient(conn)
+				if err := sendDataGRPC(a.data, client); err != nil {
+					logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
 				}
 			} else {
 				if err := a.sendDataHTTP(optData); err != nil {

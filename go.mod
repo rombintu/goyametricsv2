@@ -1,11 +1,8 @@
 module github.com/rombintu/goyametricsv2
 
-go 1.23
-
-toolchain go1.23.5
+go 1.22.8
 
 require (
-	github.com/PuerkitoBio/goquery v1.10.1
 	github.com/golang/mock v1.6.0
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/labstack/echo-contrib v0.17.1
@@ -21,7 +18,6 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.4.1-0.20240526193622-a339e1f7089c // indirect
-	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

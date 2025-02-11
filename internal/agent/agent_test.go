@@ -1,27 +1,21 @@
 package agent
 
 import (
-	"context"
 	"errors"
-	"net"
-	"sync"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
+	"github.com/rombintu/goyametricsv2/internal/mocks"
 	pb "github.com/rombintu/goyametricsv2/internal/server/proto"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest/observer"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 func Test_loadMetrics(t *testing.T) {
@@ -123,167 +117,6 @@ func TestAgent_incPollCount(t *testing.T) {
 		}
 	})
 
-}
-
-// MockSemaphore is a mock implementation of the Semaphore struct
-type MockSemaphore struct {
-	mock.Mock
-}
-
-func (m *MockSemaphore) Acquire() {
-	m.Called()
-}
-
-func (m *MockSemaphore) Release() {
-	m.Called()
-}
-
-// MockAgent is a mock implementation of the Agent struct
-type MockAgent struct {
-	mock.Mock
-	reportInterval int64
-	data           Data
-	pollCount      int
-	rateLimit      int64
-	semaphore      *MockSemaphore
-}
-
-func (m *MockAgent) sendDataHTTP(data Data) error {
-	args := m.Called(data)
-	return args.Error(0)
-}
-
-func TestRunReport(t *testing.T) {
-	// Создаем наблюдателя для логов
-	core, logs := observer.New(zap.DebugLevel)
-	logger.Log = zap.New(core)
-
-	// Создаем мок-объект для Semaphore
-	mockSemaphore := new(MockSemaphore)
-
-	// Создаем мок-объект для Agent
-	mockAgent := &MockAgent{
-		reportInterval: 1,
-		pollCount:      1,
-		rateLimit:      1,
-		semaphore:      mockSemaphore,
-	}
-
-	// Устанавливаем ожидания для мок-объекта
-	mockAgent.On("sendDataHTTP", mock.Anything).Return(nil)
-	mockSemaphore.On("Acquire").Return()
-	mockSemaphore.On("Release").Return()
-
-	// Создаем контекст с отменой
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Создаем wait group
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	// Запускаем метод RunReport в отдельной горутине
-	go RunReport(ctx, &wg, mockAgent)
-
-	// Ждем некоторое время, чтобы убедиться, что метод работает
-	time.Sleep(2 * time.Second)
-
-	// Отменяем контекст, чтобы завершить работу метода
-	cancel()
-
-	// Ждем завершения работы метода
-	wg.Wait()
-
-	// Проверяем, что логи были записаны корректно
-	allLogs := logs.All()
-	assert.GreaterOrEqual(t, len(allLogs), 2)
-	assert.Equal(t, "worker is shutdown", allLogs[len(allLogs)-1].Message)
-	assert.Equal(t, "report", allLogs[len(allLogs)-1].ContextMap()["name"])
-
-	// Проверяем, что мок-объекты были вызваны корректно
-	mockAgent.AssertExpectations(t)
-	mockSemaphore.AssertExpectations(t)
-}
-
-func TestRunReport_SendDataHTTPError(t *testing.T) {
-	// Создаем наблюдателя для логов
-	core, logs := observer.New(zap.DebugLevel)
-	logger.Log = zap.New(core)
-
-	// Создаем мок-объект для Semaphore
-	mockSemaphore := new(MockSemaphore)
-
-	// Создаем мок-объект для Agent
-	mockAgent := &MockAgent{
-		reportInterval: 1,
-		pollCount:      1,
-		rateLimit:      1,
-		semaphore:      mockSemaphore,
-	}
-
-	// Устанавливаем ожидания для мок-объекта
-	mockAgent.On("sendDataHTTP", mock.Anything).Return(errors.New("send error"))
-	mockSemaphore.On("Acquire").Return()
-	mockSemaphore.On("Release").Return()
-
-	// Создаем контекст с отменой
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Создаем wait group
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	// Запускаем метод RunReport в отдельной горутине
-	go RunReport(ctx, &wg, mockAgent)
-
-	// Ждем некоторое время, чтобы убедиться, что метод работает
-	time.Sleep(2 * time.Second)
-
-	// Отменяем контекст, чтобы завершить работу метода
-	cancel()
-
-	// Ждем завершения работы метода
-	wg.Wait()
-
-	// Проверяем, что логи были записаны корректно
-	allLogs := logs.All()
-	assert.GreaterOrEqual(t, len(allLogs), 2)
-	assert.Equal(t, "Release", allLogs[len(allLogs)-2].Message)
-
-	// Проверяем, что мок-объекты были вызваны корректно
-	mockAgent.AssertExpectations(t)
-	mockSemaphore.AssertExpectations(t)
-}
-
-// RunReport is the function we are testing
-func RunReport(ctx context.Context, wg *sync.WaitGroup, a *MockAgent) {
-	defer wg.Done()
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Log.Debug("worker is shutdown", zap.String("name", "report"))
-			return
-		default:
-			a.data.Counters = append(a.data.Counters, Counter{
-				name:  "PollCount",
-				value: int64(a.pollCount),
-			})
-			if a.rateLimit > 0 {
-				logger.Log.Debug("Acquire", zap.String("worker", "pollv1"))
-				a.semaphore.Acquire()
-			}
-			if err := a.sendDataHTTP(a.data); err != nil {
-				logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
-				time.Sleep(time.Duration(a.reportInterval) * time.Second)
-			}
-			if a.rateLimit > 0 {
-				logger.Log.Debug("Release", zap.String("worker", "pollv1"))
-				a.semaphore.Release()
-			}
-			time.Sleep(time.Duration(a.reportInterval) * time.Second)
-		}
-	}
 }
 
 func TestGetLocalIP(t *testing.T) {
@@ -399,83 +232,75 @@ func TestLoadPSUtilsMetrics_CPUError(t *testing.T) {
 	assert.Empty(t, result.Gauges)
 }
 
-const bufSize = 1024 * 1024
-
-// FakeMetricsServer реализует интерфейс MetricsServer для тестирования
-type FakeMetricsServer struct {
-	pb.UnimplementedMetricsServer
-	receivedMetrics []*pb.Metric
-}
-
-func (s *FakeMetricsServer) UpdateMetric(ctx context.Context, req *pb.UpdateMetricRequest) (*pb.UpdateMetricResponse, error) {
-	s.receivedMetrics = append(s.receivedMetrics, req.Metric)
-	return &pb.UpdateMetricResponse{Metric: &pb.Metric{}}, nil
-}
-
-func startTestServer(t *testing.T) (*grpc.Server, *bufconn.Listener) {
-	lis := bufconn.Listen(bufSize)
-	srv := grpc.NewServer()
-	fakeServer := &FakeMetricsServer{}
-	pb.RegisterMetricsServer(srv, fakeServer)
-
-	go func() {
-		if err := srv.Serve(lis); err != nil {
-			t.Errorf("server exited with error: %v", err)
-		}
-	}()
-
-	return srv, lis
-}
-
 func TestSendDataGRPC(t *testing.T) {
-	// Запускаем тестовый gRPC сервер
-	srv, lis := startTestServer(t)
-	defer srv.Stop()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	// Подготавливаем тестовые данные
-	testData := Data{
+	mockMetricsClient := mocks.NewMockMetricsClient(ctrl)
+
+	// Создаем тестовые данные
+	data := Data{
 		Counters: []Counter{
-			{name: "test_counter", value: 42},
+			{name: "counter1", value: 42},
 		},
 		Gauges: []Gauge{
-			{name: "test_gauge", value: 3.14},
+			{name: "gauge1", value: 3.14},
 		},
 	}
 
-	// Создаем соединение с тестовым сервером
-	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet",
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return lis.Dial()
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	require.NoError(t, err)
-	defer conn.Close()
+	// Ожидаем вызов UpdateMetric для Counter
+	mockMetricsClient.EXPECT().UpdateMetric(
+		gomock.Any(), // context.Context
+		&pb.UpdateMetricRequest{
+			Metric: &pb.Metric{
+				Mtype:  storage.CounterType,
+				Mname:  "counter1",
+				Mvalue: strconv.FormatInt(42, 10),
+			},
+		},
+	).Return(&pb.UpdateMetricResponse{}, nil)
 
-	// Получаем клиент для проверки
-	client := pb.NewMetricsClient(conn)
-	fakeServer := srv.GetServiceInfo()["metrics"].Server.(*FakeMetricsServer)
+	// Ожидаем вызов UpdateMetric для Gauge
+	mockMetricsClient.EXPECT().UpdateMetric(
+		gomock.Any(), // context.Context
+		&pb.UpdateMetricRequest{
+			Metric: &pb.Metric{
+				Mtype:  storage.GaugeType,
+				Mname:  "gauge1",
+				Mvalue: strconv.FormatFloat(3.14, 'g', -1, 64),
+			},
+		},
+	).Return(&pb.UpdateMetricResponse{}, nil)
 
-	// Выполняем тестируемую функцию
-	err = sendDataGRPC(testData, 0) // Порт не используется в этом тесте
-	require.NoError(t, err)
+	// Вызываем тестируемую функцию с моком
+	err := sendDataGRPC(data, mockMetricsClient)
 
-	// Даем серверу время обработать запросы
-	time.Sleep(100 * time.Millisecond)
+	// Проверяем, что ошибок нет
+	assert.NoError(t, err)
+}
 
-	// Проверяем полученные данные
-	require.Len(t, fakeServer.receivedMetrics, 2)
+func TestSendDataGRPC_Error(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	// Проверяем counter
-	counterMetric := fakeServer.receivedMetrics[0]
-	assert.Equal(t, storage.CounterType, counterMetric.Mtype)
-	assert.Equal(t, "test_counter", counterMetric.Mname)
-	assert.Equal(t, "42", counterMetric.Mvalue)
+	mockMetricsClient := mocks.NewMockMetricsClient(ctrl)
 
-	// Проверяем gauge
-	gaugeMetric := fakeServer.receivedMetrics[1]
-	assert.Equal(t, storage.GaugeType, gaugeMetric.Mtype)
-	assert.Equal(t, "test_gauge", gaugeMetric.Mname)
-	assert.Equal(t, "3.14", gaugeMetric.Mvalue)
+	// Создаем тестовые данные
+	data := Data{
+		Counters: []Counter{
+			{name: "counter1", value: 42},
+		},
+	}
+
+	// Ожидаем вызов UpdateMetric с ошибкой
+	mockMetricsClient.EXPECT().UpdateMetric(
+		gomock.Any(), // context.Context
+		gomock.Any(), // *pb.UpdateMetricRequest
+	).Return(nil, errors.New("rpc error"))
+
+	// Вызываем тестируемую функцию с моком
+	err := sendDataGRPC(data, mockMetricsClient)
+
+	// Проверяем, что ошибка возвращена
+	assert.Error(t, err)
 }
