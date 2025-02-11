@@ -32,7 +32,7 @@ tasks:
       - mockgen -source=internal/server/proto/server_grpc.pb.go -destination=internal/mocks/mock_grpc.go -package=mocks
   cover:
     cmds:
-      - go test ./... -coverprofile profiles/dry_cover.out && grep -v ".pb.go" profiles/dry_cover.out > profiles/cover.out && go tool cover -func=profiles/cover.out
+      - go test ./... -coverprofile profiles/dry_cover.out && egrep -v ".pb.go|main|mocks" profiles/dry_cover.out > profiles/cover.out && go tool cover -func=profiles/cover.out
       # - goverage -coverprofile=profiles/dry_cover.out ./... && grep -v ".pb.go" profiles/dry_cover.out > profiles/cover.out
       - task: cover-gen-svg
 

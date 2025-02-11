@@ -59,3 +59,21 @@ func (m *Metrics) setDelta(delta int64) {
 func (m *Metrics) setValue(value float64) {
 	m.Value = &value
 }
+
+// Data represents the collected metrics data, including counters and gauges.
+type Data struct {
+	Counters []Counter // The collected counter metrics
+	Gauges   []Gauge   // The collected gauge metrics
+}
+
+// Counter represents a counter metric with a name and value.
+type Counter struct {
+	Name  string // The name of the counter metric
+	Value int64  // The value of the counter metric
+}
+
+// Gauge represents a gauge metric with a name and value.
+type Gauge struct {
+	Name  string  // The name of the gauge metric
+	Value float64 // The value of the gauge metric
+}

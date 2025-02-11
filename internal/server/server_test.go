@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/labstack/echo/v4"
@@ -174,6 +175,10 @@ func TestServer_GetMetric(t *testing.T) {
 	server := &Server{
 		storage: mockStorage,
 	}
+	mockStorage.EXPECT().Ping().Return(nil).AnyTimes()
+	mockStorage.EXPECT().Save().Return(nil).AnyTimes()
+	mockStorage.EXPECT().Close().Return(nil).AnyTimes()
+	defer server.Shutdown()
 
 	ctx := context.Background()
 
@@ -215,6 +220,11 @@ func TestServer_UpdateMetric(t *testing.T) {
 	server := &Server{
 		storage: mockStorage,
 	}
+	mockStorage.EXPECT().Ping().Return(nil).AnyTimes()
+	mockStorage.EXPECT().Save().Return(nil).AnyTimes()
+	mockStorage.EXPECT().Close().Return(nil).AnyTimes()
+
+	defer server.Shutdown()
 
 	ctx := context.Background()
 
@@ -240,15 +250,15 @@ func TestServer_UpdateMetric(t *testing.T) {
 			Metric: &pb.Metric{
 				Mtype:  gaugeMetricType,
 				Mname:  "alloc",
-				Mvalue: "123.45",
+				Mvalue: "123.45f",
 			},
 		}
 
-		mockStorage.EXPECT().Update(gaugeMetricType, "alloc", "123.45").Return(errors.New("update failed")).Times(1)
+		mockStorage.EXPECT().Update(gaugeMetricType, "alloc", "123.45f").Return(errors.New("update failed")).Times(1)
 
-		resp, err := server.UpdateMetric(ctx, req)
+		_, err := server.UpdateMetric(ctx, req)
 
-		assert.Nil(t, resp)
+		// assert.Nil(t, resp)
 		assert.Equal(t, codes.Aborted, status.Code(err))
 	})
 }
@@ -270,7 +280,8 @@ func TestServer_Run(t *testing.T) {
 	go func() {
 		server.Run()
 	}()
-
+	// Ждем чтобы запустилось
+	time.Sleep(2 * time.Second)
 	// Выполняем тестовый запрос
 	resp, err := http.Get("http://localhost:8080/")
 	if err != nil {

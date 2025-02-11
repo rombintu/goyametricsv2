@@ -31,12 +31,22 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type Sender interface {
+	RunPoll(ctx context.Context, wg *sync.WaitGroup)
+	RunPollv2(ctx context.Context, wg *sync.WaitGroup)
+	RunReport(ctx context.Context, wg *sync.WaitGroup)
+	incPollCount()
+	loadMetrics()
+	PostRequestJSON(url string, data any) error
+	SendDataHTTP(data models.Data) error
+}
+
 // Agent represents the agent that collects and reports metrics to the server.
 type Agent struct {
 	serverAddress  string              // The address of the server to which metrics are reported
 	pollInterval   int64               // The interval at which metrics are polled
 	reportInterval int64               // The interval at which metrics are reported to the server
-	data           Data                // The collected metrics data
+	data           models.Data         // The collected metrics data
 	pollCount      int                 // The count of polls performed
 	hashKey        string              // The key used for hashing the metrics data
 	rateLimit      int64               // The rate limit for sending metrics
@@ -49,24 +59,6 @@ type Agent struct {
 	host          string
 	useGRPC       bool
 	grpcPort      int64
-}
-
-// Data represents the collected metrics data, including counters and gauges.
-type Data struct {
-	Counters []Counter // The collected counter metrics
-	Gauges   []Gauge   // The collected gauge metrics
-}
-
-// Counter represents a counter metric with a name and value.
-type Counter struct {
-	name  string // The name of the counter metric
-	value int64  // The value of the counter metric
-}
-
-// Gauge represents a gauge metric with a name and value.
-type Gauge struct {
-	name  string  // The name of the gauge metric
-	value float64 // The value of the gauge metric
 }
 
 // NewAgent creates a new instance of the Agent with the provided configuration.
@@ -82,7 +74,7 @@ func NewAgent(c config.AgentConfig) *Agent {
 		serverAddress:  fixServerURL(c.Address),
 		pollInterval:   c.PollInterval,
 		reportInterval: c.ReportInterval,
-		data:           Data{},
+		data:           models.Data{},
 		hashKey:        c.HashKey,
 		rateLimit:      c.RateLimit,
 		secureMode:     c.PublicKeyFile != "",
@@ -137,7 +129,7 @@ func GetLocalIP() net.IP {
 //
 // Returns:
 // - An error if the request fails, otherwise nil.
-func (a *Agent) postRequestJSON(url string, data any) error {
+func (a *Agent) PostRequestJSON(url string, data any) error {
 	if err := TryConnectToServer(a.host, a.serverAddress); err != nil {
 		return err
 	}
@@ -207,44 +199,44 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 
 // Returns:
 // - An error if the request fails, otherwise nil.
-func (a *Agent) sendDataHTTP(data Data) error {
+func (a *Agent) SendDataHTTP(data models.Data) error {
 	url := fmt.Sprintf("%s/updates/", a.serverAddress)
 	var metrics []models.Metrics
 
 	for _, c := range data.Counters {
 		m := models.Metrics{
-			ID:    c.name,
+			ID:    c.Name,
 			MType: storage.CounterType,
-			Delta: &c.value,
+			Delta: &c.Value,
 		}
 		metrics = append(metrics, m)
 	}
 
 	for _, g := range data.Gauges {
 		m := models.Metrics{
-			ID:    g.name,
+			ID:    g.Name,
 			MType: storage.GaugeType,
-			Value: &g.value,
+			Value: &g.Value,
 		}
 		metrics = append(metrics, m)
 	}
 
-	if err := a.postRequestJSON(url, metrics); err != nil {
+	if err := a.PostRequestJSON(url, metrics); err != nil {
 		return err
 	}
 	return nil
 }
 
 // iter 25
-func sendDataGRPC(data Data, client pb.MetricsClient) error {
+func sendDataGRPC(data models.Data, client pb.MetricsClient) error {
 	ctx := context.Background()
 
 	for _, c := range data.Counters {
 		_, err := client.UpdateMetric(ctx, &pb.UpdateMetricRequest{
 			Metric: &pb.Metric{
 				Mtype:  storage.CounterType,
-				Mname:  c.name,
-				Mvalue: strconv.FormatInt(c.value, 10),
+				Mname:  c.Name,
+				Mvalue: strconv.FormatInt(c.Value, 10),
 			},
 		})
 		if err != nil {
@@ -256,8 +248,8 @@ func sendDataGRPC(data Data, client pb.MetricsClient) error {
 		_, err := client.UpdateMetric(ctx, &pb.UpdateMetricRequest{
 			Metric: &pb.Metric{
 				Mtype:  storage.GaugeType,
-				Mname:  g.name,
-				Mvalue: strconv.FormatFloat(g.value, 'g', -1, 64),
+				Mname:  g.Name,
+				Mvalue: strconv.FormatFloat(g.Value, 'g', -1, 64),
 			},
 		})
 		if err != nil {
@@ -279,12 +271,12 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Debug("worker is shutdown", zap.String("name", "report"))
+			logger.Log.Debug("worker is shutdown", zap.String("Name", "report"))
 			return
 		default:
-			a.data.Counters = append(a.data.Counters, Counter{
-				name:  "PollCount",
-				value: int64(a.pollCount),
+			a.data.Counters = append(a.data.Counters, models.Counter{
+				Name:  "PollCount",
+				Value: int64(a.pollCount),
 			})
 			if a.rateLimit > 0 {
 				logger.Log.Debug("Acquire", zap.String("worker", "pollv1"))
@@ -304,11 +296,11 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 				defer conn.Close()
 				client := pb.NewMetricsClient(conn)
 				if err := sendDataGRPC(a.data, client); err != nil {
-					logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+					logger.Log.Debug("message from worker", zap.String("Name", "report"), zap.String("error", err.Error()))
 				}
 			} else {
-				if err := a.sendDataHTTP(a.data); err != nil {
-					logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+				if err := a.SendDataHTTP(a.data); err != nil {
+					logger.Log.Debug("message from worker", zap.String("Name", "report"), zap.String("error", err.Error()))
 				}
 			}
 			if a.rateLimit > 0 {
@@ -331,11 +323,11 @@ func (a *Agent) RunPoll(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Debug("worker is shutdown", zap.String("name", "poll"))
+			logger.Log.Debug("worker is shutdown", zap.String("Name", "poll"))
 			return
 		default:
 			a.loadMetrics()
-			logger.Log.Debug("message from worker", zap.String("name", "poll"), zap.String("action", "load metrics common"))
+			logger.Log.Debug("message from worker", zap.String("Name", "poll"), zap.String("action", "load metrics common"))
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
 	}
@@ -352,7 +344,7 @@ func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Debug("worker is shutdown", zap.String("name", "pollv2"))
+			logger.Log.Debug("worker is shutdown", zap.String("Name", "pollv2"))
 			return
 		default:
 			optData := loadPSUtilsMetrics()
@@ -372,10 +364,10 @@ func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 				defer conn.Close()
 				client := pb.NewMetricsClient(conn)
 				if err := sendDataGRPC(a.data, client); err != nil {
-					logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
+					logger.Log.Debug("message from worker", zap.String("Name", "report"), zap.String("error", err.Error()))
 				}
 			} else {
-				if err := a.sendDataHTTP(optData); err != nil {
+				if err := a.SendDataHTTP(optData); err != nil {
 					logger.Log.Warn(err.Error())
 				}
 			}
@@ -384,7 +376,7 @@ func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 				logger.Log.Debug("Release", zap.String("worker", "pollv2"))
 				a.semaphore.Release()
 			}
-			logger.Log.Debug("message from worker", zap.String("name", "poll"), zap.String("action", "load metrics optionally"))
+			logger.Log.Debug("message from worker", zap.String("Name", "poll"), zap.String("action", "load metrics optionally"))
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
 	}
@@ -403,28 +395,28 @@ func (a *Agent) loadMetrics() {
 	}
 	json.Unmarshal(inrec, &metricsInterface)
 
-	var counters []Counter
-	var gauges []Gauge
-	for name, value := range metricsInterface {
-		switch v := value.(type) {
+	var counters []models.Counter
+	var gauges []models.Gauge
+	for Name, Value := range metricsInterface {
+		switch v := Value.(type) {
 		case float64:
-			gauges = append(gauges, Gauge{
-				name:  name,
-				value: v,
+			gauges = append(gauges, models.Gauge{
+				Name:  Name,
+				Value: v,
 			})
 		case int64:
-			counters = append(counters, Counter{
-				name:  name,
-				value: v,
+			counters = append(counters, models.Counter{
+				Name:  Name,
+				Value: v,
 			})
 		}
 	}
 
-	// Get random float64 value
+	// Get random float64 Value
 	randomValue := rand.Float64()
-	gauges = append(gauges, Gauge{
-		name:  "RandomValue",
-		value: randomValue,
+	gauges = append(gauges, models.Gauge{
+		Name:  "RandomValue",
+		Value: randomValue,
 	})
 	a.incPollCount()
 

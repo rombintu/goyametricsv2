@@ -1,7 +1,12 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -10,6 +15,7 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	"github.com/rombintu/goyametricsv2/internal/mocks"
+	models "github.com/rombintu/goyametricsv2/internal/models"
 	pb "github.com/rombintu/goyametricsv2/internal/server/proto"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/shirou/gopsutil/v4/cpu"
@@ -36,23 +42,23 @@ func Test_fixServerURL(t *testing.T) {
 		url string
 	}
 	tests := []struct {
-		name string
+		Name string
 		args args
 		want string
 	}{
 		{
-			name: "simple fix",
+			Name: "simple fix",
 			args: args{url: "http://google.com"},
 			want: "http://google.com",
 		},
 		{
-			name: "simple fix 2",
+			Name: "simple fix 2",
 			args: args{url: "google.com"},
 			want: "http://google.com",
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.Name, func(t *testing.T) {
 			if got := fixServerURL(tt.args.url); got != tt.want {
 				t.Errorf("fixServerURL() = %v, want %v", got, tt.want)
 			}
@@ -62,16 +68,16 @@ func Test_fixServerURL(t *testing.T) {
 
 func Test_loadPSUtilsMetrics(t *testing.T) {
 	tests := []struct {
-		name           string
+		Name           string
 		lenIsMoreThen0 bool
 	}{
 		{
-			name:           "load cpu utils metrics",
+			Name:           "load cpu utils metrics",
 			lenIsMoreThen0: true,
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.Name, func(t *testing.T) {
 			if got := loadPSUtilsMetrics(); len(got.Counters) != 0 {
 				t.Errorf("Agent.loadPSUtilsMetrics() = %+v, want %v", got, tt.lenIsMoreThen0)
 			}
@@ -88,20 +94,20 @@ func TestAgent_postRequestJSON(t *testing.T) {
 		data any
 	}
 	tests := []struct {
-		name    string
+		Name    string
 		args    args
 		wantErr bool
 	}{
 		{
-			name:    "failed_post_request_json",
-			args:    args{url: "localhost:8080", data: Data{}},
+			Name:    "failed_post_request_json",
+			args:    args{url: "localhost:8080", data: models.Data{}},
 			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.Name, func(t *testing.T) {
 			a := NewAgent(config.AgentConfig{})
-			if err := a.postRequestJSON(tt.args.url, tt.args.data); (err != nil) != tt.wantErr {
+			if err := a.PostRequestJSON(tt.args.url, tt.args.data); (err != nil) != tt.wantErr {
 				t.Errorf("Agent.postRequestJSON() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -147,24 +153,24 @@ func (r RealCPUProvider) Percent(d time.Duration, b bool) ([]float64, error) {
 }
 
 // Модифицированная функция с dependency injection
-func loadPSUtilsMetricsDI(memProv MemoryProvider, cpuProv CPUProvider) Data {
+func loadPSUtilsMetricsDI(memProv MemoryProvider, cpuProv CPUProvider) models.Data {
 	v, err := memProv.VirtualMemory()
 	if err != nil {
 		logger.Log.Warn(err.Error())
-		return Data{}
+		return models.Data{}
 	}
 
 	u, err := cpuProv.Percent(0, false)
 	if err != nil {
 		logger.Log.Warn(err.Error())
-		return Data{}
+		return models.Data{}
 	}
 
-	return Data{
-		Gauges: []Gauge{
-			{name: "TotalMemory", value: float64(v.Total)},
-			{name: "FreeMemory", value: float64(v.Free)},
-			{name: "CPUutilization1", value: u[0]},
+	return models.Data{
+		Gauges: []models.Gauge{
+			{Name: "TotalMemory", Value: float64(v.Total)},
+			{Name: "FreeMemory", Value: float64(v.Free)},
+			{Name: "CPUutilization1", Value: u[0]},
 		},
 	}
 }
@@ -203,9 +209,9 @@ func TestLoadPSUtilsMetrics_Success(t *testing.T) {
 	result := loadPSUtilsMetricsDI(mockMem, mockCPU)
 
 	assert.Len(t, result.Gauges, 3)
-	assert.Contains(t, result.Gauges, Gauge{name: "TotalMemory", value: 1000000000})
-	assert.Contains(t, result.Gauges, Gauge{name: "FreeMemory", value: 500000000})
-	assert.Contains(t, result.Gauges, Gauge{name: "CPUutilization1", value: 25.5})
+	assert.Contains(t, result.Gauges, models.Gauge{Name: "TotalMemory", Value: 1000000000})
+	assert.Contains(t, result.Gauges, models.Gauge{Name: "FreeMemory", Value: 500000000})
+	assert.Contains(t, result.Gauges, models.Gauge{Name: "CPUutilization1", Value: 25.5})
 }
 
 func TestLoadPSUtilsMetrics_MemError(t *testing.T) {
@@ -239,16 +245,16 @@ func TestSendDataGRPC(t *testing.T) {
 	mockMetricsClient := mocks.NewMockMetricsClient(ctrl)
 
 	// Создаем тестовые данные
-	data := Data{
-		Counters: []Counter{
-			{name: "counter1", value: 42},
+	data := models.Data{
+		Counters: []models.Counter{
+			{Name: "counter1", Value: 42},
 		},
-		Gauges: []Gauge{
-			{name: "gauge1", value: 3.14},
+		Gauges: []models.Gauge{
+			{Name: "gauge1", Value: 3.14},
 		},
 	}
 
-	// Ожидаем вызов UpdateMetric для Counter
+	// Ожидаем вызов UpdateMetric для models.Counter
 	mockMetricsClient.EXPECT().UpdateMetric(
 		gomock.Any(), // context.Context
 		&pb.UpdateMetricRequest{
@@ -260,7 +266,7 @@ func TestSendDataGRPC(t *testing.T) {
 		},
 	).Return(&pb.UpdateMetricResponse{}, nil)
 
-	// Ожидаем вызов UpdateMetric для Gauge
+	// Ожидаем вызов UpdateMetric для models.Gauge
 	mockMetricsClient.EXPECT().UpdateMetric(
 		gomock.Any(), // context.Context
 		&pb.UpdateMetricRequest{
@@ -286,9 +292,9 @@ func TestSendDataGRPC_Error(t *testing.T) {
 	mockMetricsClient := mocks.NewMockMetricsClient(ctrl)
 
 	// Создаем тестовые данные
-	data := Data{
-		Counters: []Counter{
-			{name: "counter1", value: 42},
+	data := models.Data{
+		Counters: []models.Counter{
+			{Name: "counter1", Value: 42},
 		},
 	}
 
@@ -303,4 +309,80 @@ func TestSendDataGRPC_Error(t *testing.T) {
 
 	// Проверяем, что ошибка возвращена
 	assert.Error(t, err)
+}
+
+func TestSendDataHTTP(t *testing.T) {
+	// Создаем mock HTTP сервер
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		// Проверяем, что запрос пришел с правильным URL и методом
+		if req.URL.String() != "/updates/" {
+			t.Errorf("Expected URL '/updates/', got '%s'", req.URL.String())
+		}
+		if req.Method != http.MethodPost {
+			t.Errorf("Expected method 'POST', got '%s'", req.Method)
+		}
+
+		// Проверяем заголовки
+		if req.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Expected Content-Type 'application/json', got '%s'", req.Header.Get("Content-Type"))
+		}
+		if req.Header.Get("Content-Encoding") != "gzip" {
+			t.Errorf("Expected Content-Encoding 'gzip', got '%s'", req.Header.Get("Content-Encoding"))
+		}
+
+		// Декомпрессируем тело запроса
+		gz, err := gzip.NewReader(req.Body)
+		if err != nil {
+			t.Fatalf("Failed to create gzip reader: %v", err)
+		}
+		defer gz.Close()
+
+		var buf bytes.Buffer
+		_, err = buf.ReadFrom(gz)
+		if err != nil {
+			t.Fatalf("Failed to read gzip data: %v", err)
+		}
+
+		// Декодируем JSON
+		var receivedMetrics []models.Metrics
+		if err := json.Unmarshal(buf.Bytes(), &receivedMetrics); err != nil {
+			t.Fatalf("Failed to unmarshal JSON: %v", err)
+		}
+
+		// Проверяем данные
+		if len(receivedMetrics) != 2 {
+			t.Errorf("Expected 2 metrics, got %d", len(receivedMetrics))
+		}
+
+		// Проверяем первую метрику (Counter)
+		if receivedMetrics[0].ID != "counter1" || *receivedMetrics[0].Delta != 10 || receivedMetrics[0].MType != storage.CounterType {
+			t.Errorf("Expected counter metric 'counter1' with Delta 10, got %v", receivedMetrics[0])
+		}
+
+		// Проверяем вторую метрику (Gauge)
+		if receivedMetrics[1].ID != "gauge1" || *receivedMetrics[1].Value != 3.14 || receivedMetrics[1].MType != storage.GaugeType {
+			t.Errorf("Expected gauge metric 'gauge1' with Value 3.14, got %v", receivedMetrics[1])
+		}
+
+		// Отправляем успешный ответ
+		rw.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	ctrl := gomock.NewController(t)
+	// Создаем экземпляр MockAgent
+	agent := mocks.NewMockSender(ctrl)
+
+	// Данные для отправки
+	data := models.Data{
+		Counters: []models.Counter{{Name: "counter1", Value: 10}},
+		Gauges:   []models.Gauge{{Name: "gauge1", Value: 3.14}},
+	}
+
+	agent.EXPECT().SendDataHTTP(data).Return(nil).Times(1)
+
+	// Вызываем тестируемый метод
+	err := agent.SendDataHTTP(data)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
 }

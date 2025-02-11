@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/logger"
+	models "github.com/rombintu/goyametricsv2/internal/models"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
 )
@@ -37,25 +38,25 @@ func Ping(host, serverAddress string) error {
 //
 // Returns:
 // - The collected optional metrics data.
-func loadPSUtilsMetrics() Data {
+func loadPSUtilsMetrics() models.Data {
 	v, err := mem.VirtualMemory()
 	if err != nil {
 		logger.Log.Warn(err.Error())
-		return Data{}
+		return models.Data{}
 	}
 
 	u, err := cpu.Percent(0, false)
 	if err != nil {
 		logger.Log.Warn(err.Error())
-		return Data{}
+		return models.Data{}
 	}
 
-	var newGauges []Gauge
-	newGauges = append(newGauges, Gauge{name: "TotalMemory", value: float64(v.Total)})
-	newGauges = append(newGauges, Gauge{name: "FreeMemory", value: float64(v.Free)})
-	newGauges = append(newGauges, Gauge{name: "CPUutilization1", value: u[0]})
+	var newGauges []models.Gauge
+	newGauges = append(newGauges, models.Gauge{Name: "TotalMemory", Value: float64(v.Total)})
+	newGauges = append(newGauges, models.Gauge{Name: "FreeMemory", Value: float64(v.Free)})
+	newGauges = append(newGauges, models.Gauge{Name: "CPUutilization1", Value: u[0]})
 
-	return Data{
+	return models.Data{
 		Gauges: newGauges,
 	}
 }
