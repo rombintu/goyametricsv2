@@ -2,6 +2,8 @@
 package common
 
 import (
+	"fmt"
+	"net"
 	"os"
 	"testing"
 )
@@ -89,5 +91,42 @@ func TestReWriteFile(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestIsPortInUse_WhenPortIsFree проверяет, что функция возвращает false для свободного порта.
+func TestIsPortInUse_WhenPortIsFree(t *testing.T) {
+	port := int64(3200) // Используем порт, который, скорее всего, свободен
+
+	// Проверяем, что порт свободен
+	if IsPortInUse(port) {
+		t.Errorf("Expected port %d to be free, but it's in use", port)
+	}
+}
+
+// TestIsPortInUse_WhenPortIsInUse проверяет, что функция возвращает true для занятого порта.
+func TestIsPortInUse_WhenPortIsInUse(t *testing.T) {
+	port := int64(3201) // Используем порт для теста
+
+	// Запускаем тестовый сервер на порту
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		t.Fatalf("Failed to start test server: %v", err)
+	}
+	defer listener.Close()
+
+	// Проверяем, что порт занят
+	if !IsPortInUse(port) {
+		t.Errorf("Expected port %d to be in use, but it's free", port)
+	}
+}
+
+// TestIsPortInUse_WhenPortIsInvalid проверяет, что функция корректно обрабатывает неверный порт.
+func TestIsPortInUse_WhenPortIsInvalid(t *testing.T) {
+	invalidPort := int64(-1) // Неверный порт
+
+	// Проверяем, что функция возвращает false для неверного порта
+	if IsPortInUse(invalidPort) {
+		t.Errorf("Expected invalid port %d to be considered free", invalidPort)
 	}
 }

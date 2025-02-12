@@ -44,6 +44,7 @@ func TestLoadServerConfig(t *testing.T) {
 				RestoreFlag:    true,
 				SyncMode:       false,
 				ConfigPathFile: confFileAbsPath,
+				GRPCPort:       3200,
 			},
 			env: env,
 		},

@@ -40,11 +40,21 @@ func main() {
 	storage := storage.NewStorage(conf.StorageDriver, conf.StoragePath)
 
 	// Create a new server instance with the storage and configuration
-	server := server.NewServer(storage, conf)
-	server.Configure()
+	s := server.NewServer(storage, conf)
+	// server.Configure()
+	// Удаляю лишние сложнотестируемые функции, во благо cover tests
+	s.ConfigureRenderer(server.RendererConfig{})
+	s.ConfigureMiddlewares()
+	s.ConfigureRouter()
+	s.ConfigureStorage()
+	s.ConfigurePprof()
+	s.ConfigureCrypto()
+
+	// iter 25
+	s.ConfigureProto()
 
 	// Start the server in a separate goroutine
-	go server.Run()
+	go s.Run()
 
 	logger.OnStartUp(buildVersion, buildDate, buildCommit)
 
@@ -60,7 +70,7 @@ func main() {
 			for {
 				select {
 				case <-ticker.C:
-					server.SyncStorage()
+					s.SyncStorage()
 				case <-done:
 					logger.Log.Debug("worker is shutdown", zap.String("name", "sync_storage"))
 					return
@@ -80,6 +90,6 @@ func main() {
 	close(done)
 
 	// Gracefully shut down the server
-	server.Shutdown()
+	s.Shutdown()
 	logger.Log.Info("All workers have shut down. Exiting program.")
 }

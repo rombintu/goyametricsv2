@@ -9,9 +9,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"runtime"
-	"strings"
+	"strconv"
 	"sync"
 	"time"
 
@@ -19,22 +20,33 @@ import (
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
 	models "github.com/rombintu/goyametricsv2/internal/models"
+	pb "github.com/rombintu/goyametricsv2/internal/server/proto"
 	"github.com/rombintu/goyametricsv2/internal/storage"
 	"github.com/rombintu/goyametricsv2/lib/mycrypt"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"github.com/rombintu/goyametricsv2/lib/myhash"
 	"github.com/rombintu/goyametricsv2/lib/patterns"
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/mem"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
+
+type Sender interface {
+	RunPoll(ctx context.Context, wg *sync.WaitGroup)
+	RunPollv2(ctx context.Context, wg *sync.WaitGroup)
+	RunReport(ctx context.Context, wg *sync.WaitGroup)
+	incPollCount()
+	loadMetrics()
+	PostRequestJSON(url string, data any) error
+	SendDataHTTP(data models.Data) error
+}
 
 // Agent represents the agent that collects and reports metrics to the server.
 type Agent struct {
 	serverAddress  string              // The address of the server to which metrics are reported
 	pollInterval   int64               // The interval at which metrics are polled
 	reportInterval int64               // The interval at which metrics are reported to the server
-	data           Data                // The collected metrics data
+	data           models.Data         // The collected metrics data
 	pollCount      int                 // The count of polls performed
 	hashKey        string              // The key used for hashing the metrics data
 	rateLimit      int64               // The rate limit for sending metrics
@@ -44,24 +56,9 @@ type Agent struct {
 	publicKey     *rsa.PublicKey
 	publicKeyFile string
 	secureMode    bool
-}
-
-// Data represents the collected metrics data, including counters and gauges.
-type Data struct {
-	Counters []Counter // The collected counter metrics
-	Gauges   []Gauge   // The collected gauge metrics
-}
-
-// Counter represents a counter metric with a name and value.
-type Counter struct {
-	name  string // The name of the counter metric
-	value int64  // The value of the counter metric
-}
-
-// Gauge represents a gauge metric with a name and value.
-type Gauge struct {
-	name  string  // The name of the gauge metric
-	value float64 // The value of the gauge metric
+	host          string
+	useGRPC       bool
+	grpcPort      int64
 }
 
 // NewAgent creates a new instance of the Agent with the provided configuration.
@@ -77,11 +74,13 @@ func NewAgent(c config.AgentConfig) *Agent {
 		serverAddress:  fixServerURL(c.Address),
 		pollInterval:   c.PollInterval,
 		reportInterval: c.ReportInterval,
-		data:           Data{},
+		data:           models.Data{},
 		hashKey:        c.HashKey,
 		rateLimit:      c.RateLimit,
 		secureMode:     c.PublicKeyFile != "",
 		publicKeyFile:  c.PublicKeyFile,
+		host:           GetLocalIP().To4().String(),
+		useGRPC:        c.UseGRPC,
 	}
 }
 
@@ -103,25 +102,22 @@ func (a *Agent) Configure() {
 	}
 }
 
-// fixServerURL ensures that the server URL starts with "http://".
-// If the URL does not start with "http://", it prepends "http://" to the URL.
-//
-// Parameters:
-// - url: The server URL to be fixed.
-//
-// Returns:
-// - The fixed server URL.
-func fixServerURL(url string) string {
-	if strings.HasPrefix(url, "http://") {
-		return url
-	} else {
-		return fmt.Sprintf("http://%s", url)
-	}
-}
-
 // incPollCount increments the poll count by 1.
 func (a *Agent) incPollCount() {
 	a.pollCount++
+}
+
+// Функция для получения IP-адреса машины
+func GetLocalIP() net.IP {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		logger.Log.Error(err.Error())
+	}
+	defer conn.Close()
+
+	localAddress := conn.LocalAddr().(*net.UDPAddr)
+
+	return localAddress.IP
 }
 
 // postRequestJSON sends a POST request with JSON data to the specified URL.
@@ -133,8 +129,8 @@ func (a *Agent) incPollCount() {
 //
 // Returns:
 // - An error if the request fails, otherwise nil.
-func (a *Agent) postRequestJSON(url string, data any) error {
-	if err := a.TryConnectToServer(); err != nil {
+func (a *Agent) PostRequestJSON(url string, data any) error {
+	if err := TryConnectToServer(a.host, a.serverAddress); err != nil {
 		return err
 	}
 	jsonData, err := json.Marshal(data)
@@ -159,9 +155,11 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 	// End gzip compression
 
 	// Start crypto
-	if err := mycrypt.EncryptWithPublicKey(a.publicKey, &buff); err != nil {
-		logger.Log.Error("failed encrypt data with public key", zap.Error(err))
-		return err
+	if a.secureMode {
+		if err := mycrypt.EncryptWithPublicKey(a.publicKey, &buff); err != nil {
+			logger.Log.Error("failed encrypt data with public key", zap.Error(err))
+			return err
+		}
 	}
 	// End crypto
 
@@ -180,6 +178,9 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 	// Set header for gzip compression
 	req.Header.Set(echo.HeaderContentEncoding, mygzip.GzipHeader)
 
+	// increment 24. Add x-real-ip
+	req.Header.Set(echo.HeaderXRealIP, a.host)
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -192,37 +193,70 @@ func (a *Agent) postRequestJSON(url string, data any) error {
 
 // sendAllDataOnServer sends all collected metrics data to the server.
 // It converts the data into the appropriate format and sends it using a POST request.
-//
+
 // Parameters:
 // - data: The data to be sent to the server.
-//
+
 // Returns:
 // - An error if the request fails, otherwise nil.
-func (a *Agent) sendAllDataOnServer(data Data) error {
+func (a *Agent) SendDataHTTP(data models.Data) error {
 	url := fmt.Sprintf("%s/updates/", a.serverAddress)
 	var metrics []models.Metrics
 
 	for _, c := range data.Counters {
 		m := models.Metrics{
-			ID:    c.name,
+			ID:    c.Name,
 			MType: storage.CounterType,
-			Delta: &c.value,
+			Delta: &c.Value,
 		}
 		metrics = append(metrics, m)
 	}
 
 	for _, g := range data.Gauges {
 		m := models.Metrics{
-			ID:    g.name,
+			ID:    g.Name,
 			MType: storage.GaugeType,
-			Value: &g.value,
+			Value: &g.Value,
 		}
 		metrics = append(metrics, m)
 	}
 
-	if err := a.postRequestJSON(url, metrics); err != nil {
+	if err := a.PostRequestJSON(url, metrics); err != nil {
 		return err
 	}
+	return nil
+}
+
+// iter 25
+func sendDataGRPC(data models.Data, client pb.MetricsClient) error {
+	ctx := context.Background()
+
+	for _, c := range data.Counters {
+		_, err := client.UpdateMetric(ctx, &pb.UpdateMetricRequest{
+			Metric: &pb.Metric{
+				Mtype:  storage.CounterType,
+				Mname:  c.Name,
+				Mvalue: strconv.FormatInt(c.Value, 10),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, g := range data.Gauges {
+		_, err := client.UpdateMetric(ctx, &pb.UpdateMetricRequest{
+			Metric: &pb.Metric{
+				Mtype:  storage.GaugeType,
+				Mname:  g.Name,
+				Mvalue: strconv.FormatFloat(g.Value, 'g', -1, 64),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -237,20 +271,37 @@ func (a *Agent) RunReport(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Debug("worker is shutdown", zap.String("name", "report"))
+			logger.Log.Debug("worker is shutdown", zap.String("Name", "report"))
 			return
 		default:
-			a.data.Counters = append(a.data.Counters, Counter{
-				name:  "PollCount",
-				value: int64(a.pollCount),
+			a.data.Counters = append(a.data.Counters, models.Counter{
+				Name:  "PollCount",
+				Value: int64(a.pollCount),
 			})
 			if a.rateLimit > 0 {
 				logger.Log.Debug("Acquire", zap.String("worker", "pollv1"))
 				a.semaphore.Acquire()
 			}
-			if err := a.sendAllDataOnServer(a.data); err != nil {
-				logger.Log.Debug("message from worker", zap.String("name", "report"), zap.String("error", err.Error()))
-				time.Sleep(time.Duration(a.reportInterval) * time.Second)
+
+			// switch ptorocols
+			if a.useGRPC {
+				conn, err := grpc.Dial(fmt.Sprintf(
+					":%d", a.grpcPort),
+					grpc.WithTransportCredentials(insecure.NewCredentials()),
+				)
+				if err != nil {
+					logger.Log.Error("error from grpc Client", zap.Error(err))
+					continue
+				}
+				defer conn.Close()
+				client := pb.NewMetricsClient(conn)
+				if err := sendDataGRPC(a.data, client); err != nil {
+					logger.Log.Debug("message from worker", zap.String("Name", "report"), zap.String("error", err.Error()))
+				}
+			} else {
+				if err := a.SendDataHTTP(a.data); err != nil {
+					logger.Log.Debug("message from worker", zap.String("Name", "report"), zap.String("error", err.Error()))
+				}
 			}
 			if a.rateLimit > 0 {
 				logger.Log.Debug("Release", zap.String("worker", "pollv1"))
@@ -272,11 +323,11 @@ func (a *Agent) RunPoll(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Debug("worker is shutdown", zap.String("name", "poll"))
+			logger.Log.Debug("worker is shutdown", zap.String("Name", "poll"))
 			return
 		default:
 			a.loadMetrics()
-			logger.Log.Debug("message from worker", zap.String("name", "poll"), zap.String("action", "load metrics common"))
+			logger.Log.Debug("message from worker", zap.String("Name", "poll"), zap.String("action", "load metrics common"))
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
 	}
@@ -293,52 +344,41 @@ func (a *Agent) RunPollv2(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Log.Debug("worker is shutdown", zap.String("name", "pollv2"))
+			logger.Log.Debug("worker is shutdown", zap.String("Name", "pollv2"))
 			return
 		default:
-			optData := a.loadPSUtilsMetrics()
+			optData := loadPSUtilsMetrics()
 			if a.rateLimit > 0 {
 				logger.Log.Debug("Acquire", zap.String("worker", "pollv2"))
 				a.semaphore.Acquire()
 			}
-			if err := a.sendAllDataOnServer(optData); err != nil {
-				logger.Log.Warn(err.Error())
+			if a.useGRPC {
+				conn, err := grpc.Dial(fmt.Sprintf(
+					":%d", a.grpcPort),
+					grpc.WithTransportCredentials(insecure.NewCredentials()),
+				)
+				if err != nil {
+					logger.Log.Error("error from grpc Client", zap.Error(err))
+					continue
+				}
+				defer conn.Close()
+				client := pb.NewMetricsClient(conn)
+				if err := sendDataGRPC(a.data, client); err != nil {
+					logger.Log.Debug("message from worker", zap.String("Name", "report"), zap.String("error", err.Error()))
+				}
+			} else {
+				if err := a.SendDataHTTP(optData); err != nil {
+					logger.Log.Warn(err.Error())
+				}
 			}
+
 			if a.rateLimit > 0 {
 				logger.Log.Debug("Release", zap.String("worker", "pollv2"))
 				a.semaphore.Release()
 			}
-			logger.Log.Debug("message from worker", zap.String("name", "poll"), zap.String("action", "load metrics optionally"))
+			logger.Log.Debug("message from worker", zap.String("Name", "poll"), zap.String("action", "load metrics optionally"))
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
-	}
-}
-
-// loadPSUtilsMetrics collects optional metrics using the gopsutil library.
-// It collects metrics related to memory and CPU utilization.
-//
-// Returns:
-// - The collected optional metrics data.
-func (a *Agent) loadPSUtilsMetrics() Data {
-	v, err := mem.VirtualMemory()
-	if err != nil {
-		logger.Log.Warn(err.Error())
-		return Data{}
-	}
-
-	u, err := cpu.Percent(0, false)
-	if err != nil {
-		logger.Log.Warn(err.Error())
-		return Data{}
-	}
-
-	var newGauges []Gauge
-	newGauges = append(newGauges, Gauge{name: "TotalMemory", value: float64(v.Total)})
-	newGauges = append(newGauges, Gauge{name: "FreeMemory", value: float64(v.Free)})
-	newGauges = append(newGauges, Gauge{name: "CPUutilization1", value: u[0]})
-
-	return Data{
-		Gauges: newGauges,
 	}
 }
 
@@ -355,28 +395,28 @@ func (a *Agent) loadMetrics() {
 	}
 	json.Unmarshal(inrec, &metricsInterface)
 
-	var counters []Counter
-	var gauges []Gauge
-	for name, value := range metricsInterface {
-		switch v := value.(type) {
+	var counters []models.Counter
+	var gauges []models.Gauge
+	for Name, Value := range metricsInterface {
+		switch v := Value.(type) {
 		case float64:
-			gauges = append(gauges, Gauge{
-				name:  name,
-				value: v,
+			gauges = append(gauges, models.Gauge{
+				Name:  Name,
+				Value: v,
 			})
 		case int64:
-			counters = append(counters, Counter{
-				name:  name,
-				value: v,
+			counters = append(counters, models.Counter{
+				Name:  Name,
+				Value: v,
 			})
 		}
 	}
 
-	// Get random float64 value
+	// Get random float64 Value
 	randomValue := rand.Float64()
-	gauges = append(gauges, Gauge{
-		name:  "RandomValue",
-		value: randomValue,
+	gauges = append(gauges, models.Gauge{
+		Name:  "RandomValue",
+		Value: randomValue,
 	})
 	a.incPollCount()
 
@@ -384,32 +424,19 @@ func (a *Agent) loadMetrics() {
 	a.data.Gauges = gauges
 }
 
-// Ping sends a GET request to the server's ping endpoint to check the connection.
-//
-// Returns:
-// - An error if the request fails, otherwise nil.
-func (a *Agent) Ping() error {
-	resp, err := http.Get(a.serverAddress + "/ping")
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	return nil
-}
-
 // TryConnectToServer attempts to connect to the server by sending a ping request.
 // It retries the connection up to 5 times with increasing intervals if the initial attempt fails.
 //
 // Returns:
 // - An error if the connection fails after all retries, otherwise nil.
-func (a *Agent) TryConnectToServer() error {
+func TryConnectToServer(host, serverAddress string) error {
 	var err error
-	if err = a.Ping(); err != nil {
+	if err = Ping(host, serverAddress); err != nil {
 		for i := 1; i <= 5; i += 2 {
 			// Try reconnecting after 2 seconds if connection failed
 			logger.Log.Debug("Ping failed, trying to reconnect", zap.Int("attempt", i))
 			time.Sleep(time.Duration(i) * time.Second)
-			if err := a.Ping(); err == nil {
+			if err := Ping(host, serverAddress); err == nil {
 				return nil
 			}
 		}

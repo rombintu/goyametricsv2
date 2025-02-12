@@ -2,18 +2,27 @@
 package server
 
 import (
+	"context"
 	"crypto/rsa"
+	"fmt"
+	"net"
 	"net/http"
 
 	"github.com/labstack/echo-contrib/pprof"
 	"github.com/labstack/echo/v4"
 	"github.com/rombintu/goyametricsv2/internal/config"
 	"github.com/rombintu/goyametricsv2/internal/logger"
+	pb "github.com/rombintu/goyametricsv2/internal/server/proto"
 	"github.com/rombintu/goyametricsv2/internal/storage"
+	"github.com/rombintu/goyametricsv2/lib/common"
 	"github.com/rombintu/goyametricsv2/lib/mycrypt"
 	"github.com/rombintu/goyametricsv2/lib/mygzip"
 	"github.com/rombintu/goyametricsv2/lib/myhash"
+	"github.com/rombintu/goyametricsv2/lib/myorigin"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type InternalStorage struct {
@@ -22,6 +31,7 @@ type InternalStorage struct {
 
 // Server represents the main server struct that holds the configuration, storage, and router.
 type Server struct {
+	pb.UnimplementedMetricsServer
 	config          config.ServerConfig // Configuration for the server
 	storage         storage.Storage     // Storage interface for managing data
 	router          *echo.Echo          // Echo router for handling HTTP requests
@@ -43,16 +53,6 @@ func NewServer(storage storage.Storage, config config.ServerConfig) *Server {
 		router:  echo.New(),
 		storage: storage,
 	}
-}
-
-// Configure sets up various components of the server, including the renderer, middlewares, router, storage, and pprof.
-func (s *Server) Configure() {
-	s.ConfigureRenderer("")
-	s.ConfigureMiddlewares()
-	s.ConfigureRouter()
-	s.ConfigureStorage()
-	s.ConfigurePprof()
-	s.ConfigureCrypto()
 }
 
 // Run starts the server by listening on the configured address and handling incoming requests.
@@ -119,6 +119,11 @@ func (s *Server) ConfigureMiddlewares() {
 	// Hash check middleware for verifying request integrity
 	s.router.Use(myhash.HashCheckMiddleware(s.config.HashKey))
 
+	// iter 24
+	logger.Log.Debug("Trusted subnet: ", zap.String("network", s.config.TrustedSubnet))
+	if s.config.TrustedSubnet != "" {
+		s.router.Use(myorigin.OriginMiddleware(s.config.TrustedSubnet))
+	}
 }
 
 // ConfigurePprof registers the pprof handlers with the server's router.
@@ -173,4 +178,59 @@ func (s *Server) Shutdown() {
 	if err := s.storage.Close(); err != nil {
 		logger.Log.Error("cannot close storage", zap.Error(err))
 	}
+}
+
+func (s *Server) ConfigureProto() {
+	// определяем порт для сервера
+	if common.IsPortInUse(s.config.GRPCPort) {
+		// Заглушка, используем любой порт (для тестов)
+		s.config.GRPCPort = 0
+	}
+	listen, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.GRPCPort))
+	if err != nil {
+		logger.Log.Error(err.Error())
+	}
+	// создаём gRPC-сервер без зарегистрированной службы
+	serv := grpc.NewServer()
+	// регистрируем сервис
+	pb.RegisterMetricsServer(serv, s)
+
+	logger.Log.Info("start gRPC server")
+	go func() {
+		if err := serv.Serve(listen); err != nil {
+			logger.Log.Error("gRPC server failed: ", zap.Error(err))
+		}
+	}()
+}
+
+func (s *Server) GetMetric(ctx context.Context, in *pb.GetMetricRequest) (*pb.GetMetricResponse, error) {
+	if in == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is nil")
+	}
+	value, err := s.storage.Get(in.Mtype, in.Mname)
+	if err != nil {
+		logger.Log.Error(err.Error(), zap.String("type", in.Mtype), zap.String("id/name", in.Mname))
+		return nil, status.Errorf(codes.NotFound, "not found: %s - %s", in.Mtype, in.Mname)
+	}
+	return &pb.GetMetricResponse{
+		Metric: &pb.Metric{
+			Mtype:  in.Mtype,
+			Mname:  in.Mname,
+			Mvalue: value,
+		},
+	}, nil
+}
+
+func (s *Server) UpdateMetric(ctx context.Context, in *pb.UpdateMetricRequest) (*pb.UpdateMetricResponse, error) {
+	var r pb.UpdateMetricResponse
+	if err := s.storage.Update(
+		in.Metric.Mtype,
+		in.Metric.Mname,
+		in.Metric.Mvalue,
+	); err != nil {
+		logger.Log.Error(err.Error(), zap.String("type", in.Metric.Mtype), zap.String("id/name", in.Metric.Mname))
+		return nil, status.Error(codes.Aborted, err.Error())
+	}
+	r.Metric = in.Metric
+	return &r, nil
 }

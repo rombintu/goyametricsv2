@@ -49,6 +49,13 @@ const (
 	// Inter 22
 	defaultPathConfig = ""
 	hintPathConfig    = "Path to config file"
+
+	// Inter 24
+	hintTrustedSubnet = "Resolve subnet hosts agent"
+
+	// Inter 25
+	defaultGRPCPort = 3200
+	hintGRPCPort    = "gRPC protocol Port"
 )
 
 // Костыль который еще никто не видел на этом свете
